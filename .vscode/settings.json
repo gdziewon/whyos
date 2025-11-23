@@ -1,0 +1,7 @@
+{
+    "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.check.extraArgs": [
+        "--target", "thumbv8m.main-none-eabihf"
+    ],
+    "debug.onTaskErrors": "abort"
+}

@@ -1,0 +1,15 @@
+[build]
+target = "thumbv8m.main-none-eabihf"
+
+[target.thumbv8m.main-none-eabihf]
+rustflags = [
+  "-C", "link-arg=--nmagic", # turns off page alignment of section (saves flash space)
+  "-C", "link-arg=-Tlink.x", # use link.x as linker script (cortex-m-rt)
+  "-C", "link-arg=-Tdefmt.x", # use defmt.x linker script also (dfmt_rtt)
+  "-C", "target-cpu=cortex-m33",
+]
+
+runner = "probe-rs run --chip RP235x"
+
+[env]
+DEFMT_LOG = "trace" # enable all log levels
