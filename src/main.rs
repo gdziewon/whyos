@@ -1,14 +1,15 @@
 #![no_std]
 #![no_main]
 
-mod kernel;
+mod whyos;
+
+use whyos::Stack;
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{self, Ordering};
 
 use rp235x_hal::{self as hal, Clock as _};
 use hal::{binary_info, block::ImageDef};
-use cortex_m::{self, peripheral};
 use cortex_m_rt::{exception, ExceptionFrame};
 use defmt::{info, error};
 use defmt_rtt as _;
@@ -19,31 +20,29 @@ pub static IMAGE_DEF: ImageDef = ImageDef::secure_exe();
 
 const XTAL_FREQ_HZ: u32 = 12_000_000u32; // 12 MHz
 
-static STACK_1: kernel::Stack<4096> = kernel::Stack::<4096>::new();
-static STACK_2: kernel::Stack<4096> = kernel::Stack::<4096>::new();
+static STACK_1: Stack<4096> = Stack::new();
+static STACK_2: Stack<4096> = Stack::new();
+static STACK_3: Stack<4096> = Stack::new();
 
-#[unsafe(no_mangle)]
 extern "C" fn task_1() -> ! {
     loop {
         info!("I'm task1 !");
-        for _ in 1..1_000_000 {}
+        whyos::sleep(500 * 5);
     }
 }
 
-#[unsafe(no_mangle)]
 extern "C" fn task_2() -> ! {
     loop {
         info!("I'm task2 !");
-        for _ in 1..100_000 {}
+        whyos::sleep(600 * 5);
     }
 }
 
-fn config_systick(syst: &mut peripheral::SYST, freq: u32) {
-    syst.set_clock_source(peripheral::syst::SystClkSource::Core);
-    syst.set_reload(freq / 10);
-    syst.clear_current();
-    syst.enable_counter();
-    syst.enable_interrupt();
+extern "C" fn task_3() -> ! {
+    loop {
+        info!("I'm task3 !");
+        whyos::sleep(700 * 5);
+    }
 }
 
 #[hal::entry]
@@ -63,29 +62,20 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    unsafe {
-        let sp1 = STACK_1.init(task_1);
-        kernel::TASKS[0].sp = sp1;
-
-        let sp2 = STACK_2.init(task_2);
-        kernel::TASKS[1].sp = sp2;
-    }
+    whyos::add_task(&STACK_1, task_1);
+    whyos::add_task(&STACK_2, task_2);
+    whyos::add_task(&STACK_3, task_3);
 
     let mut syst = core.SYST;
     let sys_freq = clocks.system_clock.freq().to_Hz();
-    config_systick(&mut syst, sys_freq / 1000); // about 1500 Hz
 
-    unsafe { core::arch::asm!("svc 0"); } // todo: cortex-m crate might implement this
-
-    loop {
-        cortex_m::asm::nop();
-    }
+    unsafe { whyos::start(&mut syst, sys_freq / 1000); }
 }
 
 #[inline(never)]
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! { // inspired by panic_halt implementation
-    error!("PANIC!");
+fn panic(info: &PanicInfo) -> ! { // inspired by panic_halt implementation
+    error!("PANIC! {}", info);
     loop {
         atomic::compiler_fence(Ordering::SeqCst);
     }
