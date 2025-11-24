@@ -27,6 +27,7 @@ static STACK_3: Stack<4096> = Stack::new();
 extern "C" fn task_1() -> ! {
     loop {
         info!("I'm task1 !");
+        //for _ in 0..1_000_000 {}
         whyos::sleep(500 * 5);
     }
 }
@@ -62,9 +63,9 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    whyos::add_task(&STACK_1, task_1);
-    whyos::add_task(&STACK_2, task_2);
-    whyos::add_task(&STACK_3, task_3);
+    whyos::add_task(&STACK_1, task_1, 255);
+    whyos::add_task(&STACK_2, task_2, 1);
+    whyos::add_task(&STACK_3, task_3, 3);
 
     let mut syst = core.SYST;
     let sys_freq = clocks.system_clock.freq().to_Hz();

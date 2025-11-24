@@ -25,11 +25,12 @@ enum TaskState {
 struct Tcb { // task control block
     pub sp: u32,
     pub state: TaskState,
+    pub priority: u8, // lower number = higher priority
     pub wakeup_time: u64
 }
 
 struct KernelState {
-    tasks: [Tcb; MAX_TASKS],
+    tasks: [Tcb; MAX_TASKS], // todo: make it MaybeUninit array?
     current_task: usize,
     task_count: usize,
     system_ticks: u64
@@ -37,14 +38,14 @@ struct KernelState {
 
 // todo: maybe RefCell can be removed somehow
 static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
-    tasks: [Tcb { sp: 0, state: TaskState::Ready, wakeup_time: 0 }; MAX_TASKS],
+    tasks: [Tcb { sp: 0, state: TaskState::Ready, priority: u8::MAX, wakeup_time: 0 }; MAX_TASKS],
     current_task: 0,
     task_count: 1, // first spot reserved for idle task
     system_ticks: 0
 }));
 
 // fixme: very bad api, stack shouldnt need to be provided
-pub fn add_task<const N: usize>(stack: &'static Stack<N>, entry: TaskEntryPoint) {
+pub fn add_task<const N: usize>(stack: &'static Stack<N>, entry: TaskEntryPoint, priority: u8) {
     let sp = stack.init(entry);
 
     critical_section::with(|cs| {
@@ -55,7 +56,7 @@ pub fn add_task<const N: usize>(stack: &'static Stack<N>, entry: TaskEntryPoint)
         }
 
         let idx = kernel.task_count;
-        kernel.tasks[idx] = Tcb { sp, state: TaskState::Ready, wakeup_time: 0 };
+        kernel.tasks[idx] = Tcb { sp, state: TaskState::Ready, priority, wakeup_time: 0 };
         kernel.task_count += 1;
     });
 }
@@ -89,6 +90,7 @@ fn init_idle_task() { // idle task is ran when every other task can't
         kernel.tasks[0] = Tcb { // idle task will have index 0 for simplicity
             sp,
             state: TaskState::Ready,
+            priority: u8::MAX,
             wakeup_time: 0
         };
     });
@@ -120,20 +122,25 @@ extern "C" fn switch_task(old_sp: u32) -> u32 {
         kernel.tasks[current].sp = old_sp;
 
         // if ready task isn't found, fallback to idle task
-        let mut next_task = 0;
+        let mut best_task = 0;
+        let mut best_prio = u8::MAX;
 
-        for i in 1..kernel.task_count {
-            let mut idx = (current + i) % kernel.task_count; // wrapping iteration
-            if idx == 0 { idx = 1 };
+        for i in 1..=kernel.task_count {
+            let idx = (current + i) % kernel.task_count; // priority + round robin for prio ties
 
-            if let TaskState::Ready = kernel.tasks[idx].state {
-                next_task = idx;
-                break;
+            // needed in case if user defines task with priority 255, idle task should never win ties in this case
+            if idx == 0 { continue; } // todo: look for better design
+
+            let task = &kernel.tasks[idx];
+
+            if task.state == TaskState::Ready && task.priority <= best_prio {
+                best_prio = task.priority;
+                best_task = idx;
             }
         }
 
-        kernel.current_task = next_task;
-        kernel.tasks[next_task].sp
+        kernel.current_task = best_task;
+        kernel.tasks[best_task].sp
     })
 }
 
