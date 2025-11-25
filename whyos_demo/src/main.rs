@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-mod whyos;
-
 use whyos::Stack;
 
 use core::panic::PanicInfo;

@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, ops::{Deref, DerefMut}};
 use critical_section::Mutex as CSMutex;
 
-use crate::whyos::scheduler::{self, MAX_TASKS};
+use crate::scheduler::{self, MAX_TASKS};
 
 
 pub struct Mutex<T> {

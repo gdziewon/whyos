@@ -7,7 +7,6 @@ fn main() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     println!("cargo:rustc-link-search={}", out_dir.display()); // tell linker to look for scripts in OUT_DIR
 
-
     // copy memory.x file into OUT_DIR
     let memory_x = include_bytes!("memory.x"); // bake memory.x bytes into build binary
     let mut f = File::create(out_dir.join("memory.x")).unwrap();

@@ -1,0 +1,20 @@
+[package]
+name = "whyos_demo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+whyos= { path = "../whyos" }
+
+cortex-m = "0.7.6"
+cortex-m-rt = "0.7.5"
+
+# embedded-hal = "1.0.0" // provides useful traits, not used right now
+rp235x-hal = { version = "0.3.0", features = [
+  "binary-info", # include a static variable containing binary info
+  "critical-section-impl", # critical section that is safe for multicore use
+  "defmt", # implements defmt::Format for several types
+] }
+
+defmt = "1.0.1"
+defmt-rtt = "1.1.0"

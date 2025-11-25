@@ -1,3 +1,5 @@
+#![no_std]
+
 mod scheduler;
 mod task;
 mod itc;
@@ -6,7 +8,7 @@ pub use task::Stack;
 pub use itc::Mutex;
 use task::{TaskEntryPoint, Tcb, TaskState};
 
-use crate::whyos::scheduler::{KERNEL, MAX_TASKS, config_systick, init_idle_task};
+use scheduler::{KERNEL, MAX_TASKS, config_systick, init_idle_task};
 
 // fixme: very bad api, stack shouldnt need to be provided
 pub fn add_task<const N: usize>(stack: &'static Stack<N>, entry: TaskEntryPoint, priority: u8) {

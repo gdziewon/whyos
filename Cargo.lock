@@ -601,7 +601,17 @@ dependencies = [
  "cortex-m-rt",
  "critical-section",
  "defmt 1.0.1",
- "defmt-rtt",
  "embedded-hal 1.0.0",
+]
+
+[[package]]
+name = "whyos_demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "defmt 1.0.1",
+ "defmt-rtt",
  "rp235x-hal",
+ "whyos",
 ]

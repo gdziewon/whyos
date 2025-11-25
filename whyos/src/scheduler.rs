@@ -7,7 +7,7 @@ use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 use critical_section::Mutex;
 
-pub const MAX_TASKS: usize = 256;
+pub const MAX_TASKS: usize = 16;
 static IDLE_STACK: Stack<4096> = Stack::new();
 const IDLE_TID: usize = 0;
 
