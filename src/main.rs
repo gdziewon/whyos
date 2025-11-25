@@ -24,18 +24,31 @@ static STACK_1: Stack<4096> = Stack::new();
 static STACK_2: Stack<4096> = Stack::new();
 static STACK_3: Stack<4096> = Stack::new();
 
+static SHARED_COUNTER: whyos::Mutex<u64> = whyos::Mutex::new(0);
+
 extern "C" fn task_1() -> ! {
     loop {
-        info!("I'm task1 !");
-        //for _ in 0..1_000_000 {}
-        whyos::sleep(500 * 5);
+        let counter = SHARED_COUNTER.lock();
+
+        *counter += 1;
+        info!("task1: Count= {}", *counter);
+
+        SHARED_COUNTER.unlock();
+
+        whyos::sleep(500);
     }
 }
 
 extern "C" fn task_2() -> ! {
     loop {
-        info!("I'm task2 !");
-        whyos::sleep(600 * 5);
+        let counter = SHARED_COUNTER.lock();
+
+        *counter += 1;
+        defmt::info!("task2: Count= {}", *counter);
+
+        SHARED_COUNTER.unlock();
+
+        whyos::sleep(600);
     }
 }
 
@@ -65,7 +78,7 @@ fn main() -> ! {
 
     whyos::add_task(&STACK_1, task_1, 255);
     whyos::add_task(&STACK_2, task_2, 1);
-    whyos::add_task(&STACK_3, task_3, 3);
+    //whyos::add_task(&STACK_3, task_3, 3);
 
     let mut syst = core.SYST;
     let sys_freq = clocks.system_clock.freq().to_Hz();

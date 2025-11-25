@@ -1,10 +1,27 @@
 use core::{cell::UnsafeCell, mem::{self, MaybeUninit}, ptr};
 
-use crate::whyos::{EXC_RETURN_THREAD_PSP, TaskEntryPoint};
 
-
+pub const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
 const XPSR_THUMB: u32 = 0x01000000;
 
+pub type TaskEntryPoint = extern "C" fn() -> !;
+
+// inspired by https://freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/02-Task-states
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum TaskState {
+    Ready,
+    Running,
+    Blocked,
+    Suspended
+}
+
+#[derive(Clone, Copy)]
+pub struct Tcb { // task control block
+    pub sp: u32,
+    pub state: TaskState,
+    pub priority: u8, // lower number = higher priority
+    pub wakeup_time: u64
+}
 
 #[repr(C)]
 #[derive(Debug)]
