@@ -28,12 +28,12 @@ static SHARED_COUNTER: whyos::Mutex<u64> = whyos::Mutex::new(0);
 
 extern "C" fn task_1() -> ! {
     loop {
-        let counter = SHARED_COUNTER.lock();
+        {
+            let mut counter = SHARED_COUNTER.lock();
 
-        *counter += 1;
-        info!("task1: Count= {}", *counter);
-
-        SHARED_COUNTER.unlock();
+            *counter += 1;
+            info!("task1: Count= {}", *counter);
+        }
 
         whyos::sleep(500);
     }
@@ -41,12 +41,12 @@ extern "C" fn task_1() -> ! {
 
 extern "C" fn task_2() -> ! {
     loop {
-        let counter = SHARED_COUNTER.lock();
+        {
+            let mut counter = SHARED_COUNTER.lock();
 
-        *counter += 1;
-        defmt::info!("task2: Count= {}", *counter);
-
-        SHARED_COUNTER.unlock();
+            *counter += 1;
+            defmt::info!("task2: Count= {}", *counter);
+        }
 
         whyos::sleep(600);
     }

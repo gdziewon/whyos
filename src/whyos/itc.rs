@@ -1,4 +1,4 @@
-use core::cell::{RefCell, UnsafeCell};
+use core::{cell::{RefCell, UnsafeCell}, ops::{Deref, DerefMut}};
 use critical_section::Mutex as CSMutex;
 
 use crate::whyos::scheduler::{self, MAX_TASKS};
@@ -8,8 +8,6 @@ pub struct Mutex<T> {
     data: UnsafeCell<T>,
     state: CSMutex<RefCell<MutexState>>
 }
-
-unsafe impl<T: Send> Sync for Mutex<T> {}
 
 struct MutexState {
     locked: bool,
@@ -27,6 +25,35 @@ impl MutexState {
     }
 }
 
+pub struct MutexGuard<'a, T> {
+    lock: &'a Mutex<T>,
+}
+
+impl<T> Deref for MutexGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        // its safe, as if we have MutexGuard, we own the lock
+        unsafe { &*self.lock.data.get() }
+    }
+}
+
+impl<T> DerefMut for MutexGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // we own the lock
+        unsafe { &mut *self.lock.data.get() }
+    }
+}
+
+impl<T> Drop for MutexGuard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.release();
+    }
+}
+
+// todo: check all the usages of "unsafe" and deduce if they are safe, leave comment explaining why
+unsafe impl<T: Send> Sync for Mutex<T> {}
+
 impl<T> Mutex<T> {
     pub const fn new(data: T) -> Self {
         Self {
@@ -35,7 +62,8 @@ impl<T> Mutex<T> {
         }
     }
 
-    pub fn lock(&self) -> &mut T { // todo: implement MutexGuard
+    // returns MutexGuard which releases the lock when it goes out of scope
+    pub fn lock(&self) -> MutexGuard<'_, T> {
         // loop is needed since if the acquisition fails, task should check from the start
         loop {
             // variable to track what to do after interrupts are enabled
@@ -56,14 +84,14 @@ impl<T> Mutex<T> {
             });
 
             if resource_acquired {
-                return unsafe { &mut *self.data.get()} // we got mutex, return
+                return MutexGuard { lock: self };
             } else {
                 scheduler::yield_now()
             }
         }
     }
 
-    pub fn unlock(&self) {
+    fn release(&self) {
         let mut woken = false;
 
         critical_section::with(|cs| {
