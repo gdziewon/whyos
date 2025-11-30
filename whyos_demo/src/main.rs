@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use whyos::Stack;
+use whyos::{Queue, Stack};
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{self, Ordering};
@@ -22,31 +22,30 @@ static STACK_1: Stack<4096> = Stack::new();
 static STACK_2: Stack<4096> = Stack::new();
 static STACK_3: Stack<4096> = Stack::new();
 
-static SHARED_COUNTER: whyos::Mutex<u64> = whyos::Mutex::new(0);
+static DATA_QUEUE: whyos::Queue<u32, 3> = Queue::new();
 
 extern "C" fn task_1() -> ! {
+    let mut counter = 0;
     loop {
-        {
-            let mut counter = SHARED_COUNTER.lock();
+        info!("Task1: sending {}...", counter);
 
-            *counter += 1;
-            info!("task1: Count= {}", *counter);
-        }
+        DATA_QUEUE.send(counter);
 
+        info!("Task1: sent {}!", counter);
+
+        counter += 1;
         whyos::sleep(500);
     }
 }
 
 extern "C" fn task_2() -> ! {
     loop {
-        {
-            let mut counter = SHARED_COUNTER.lock();
+        info!("Task2: Waiting for data...");
 
-            *counter += 1;
-            defmt::info!("task2: Count= {}", *counter);
-        }
+        let val = DATA_QUEUE.receive();
 
-        whyos::sleep(600);
+        info!("Task2: Received {}", val);
+        whyos::sleep(2000);
     }
 }
 
@@ -74,8 +73,8 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    whyos::add_task(&STACK_1, task_1, 255);
-    whyos::add_task(&STACK_2, task_2, 1);
+    whyos::add_task(&STACK_1, task_1, 1);
+    whyos::add_task(&STACK_2, task_2, 2);
     //whyos::add_task(&STACK_3, task_3, 3);
 
     let mut syst = core.SYST;
