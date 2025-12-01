@@ -1,5 +1,6 @@
 
-pub use super::task::Stack;
+use crate::{memory, task};
+
 use super::task::{EXC_RETURN_THREAD_PSP, Tcb, TaskState};
 
 use core::{arch::naked_asm, cell::RefCell};
@@ -8,8 +9,8 @@ use cortex_m_rt::exception;
 use critical_section::Mutex;
 
 pub const MAX_TASKS: usize = 32; // this should stay hardcoded
-static IDLE_STACK: Stack<4096> = Stack::new();
 const IDLE_TID: usize = 0;
+const IDLE_STACK_SIZE: usize = 4096; // todo: might be too much
 
 pub struct KernelState {
     pub tasks: [Tcb; MAX_TASKS],
@@ -19,7 +20,7 @@ pub struct KernelState {
 }
 
 pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
-    tasks: [Tcb { sp: 0, state: TaskState::Ready, priority: u8::MAX, wakeup_time: 0 }; MAX_TASKS],
+    tasks: [Tcb::default(); MAX_TASKS],
     current_task: IDLE_TID,
     task_count: 1, // first spot reserved for idle task
     system_ticks: 0
@@ -32,16 +33,16 @@ pub fn init_idle_task() { // idle task is ran when every other task can't
         }
     }
 
-    let sp = IDLE_STACK.init(idle_task);
+    let stack = match memory::alloc(IDLE_STACK_SIZE) {
+        Some(mem) => mem,
+        None => panic!("WhyOS: Out of Memory")
+    };
+
+    let sp = unsafe { task::init_stack(stack.ptr, stack.size, idle_task)};
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        kernel.tasks[IDLE_TID] = Tcb { // idle task will have index 0 for simplicity
-            sp,
-            state: TaskState::Ready,
-            priority: u8::MAX,
-            wakeup_time: 0
-        };
+        kernel.tasks[IDLE_TID] = Tcb::new(sp, u8::MAX, stack.ptr as usize, stack.size);
     });
 }
 
@@ -87,7 +88,7 @@ pub fn yield_now() {
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn get_idle_task_sp() -> u32 {
+extern "C" fn get_idle_task_sp() -> usize {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
         kernel.tasks[IDLE_TID].sp
@@ -95,7 +96,7 @@ extern "C" fn get_idle_task_sp() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn switch_task(old_sp: u32) -> u32 {
+extern "C" fn switch_task(old_sp: usize) -> usize {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
 
@@ -115,20 +116,28 @@ extern "C" fn switch_task(old_sp: u32) -> u32 {
 
             let task = &kernel.tasks[tid];
 
-            if task.state == TaskState::Ready && task.priority <= best_prio {
-                best_prio = task.priority;
-                best_task = tid;
+            if task.state == TaskState::Ready {
+                if task.priority <= best_prio {
+                    best_prio = task.priority;
+                    best_task = tid;
+                }
             }
         }
 
+        let current = kernel.current_task;
+        if kernel.tasks[current].state == TaskState::Running {
+            kernel.tasks[current].state = TaskState::Ready;
+        }
+
         kernel.current_task = best_task;
+        kernel.tasks[best_task].state = TaskState::Running;
         kernel.tasks[best_task].sp
     })
 }
 
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
-pub unsafe extern "C" fn PendSV() {
+pub unsafe extern "C" fn PendSV() { // todo: implement FPU!!!!
     naked_asm!(
         "mrs r0, psp",            // move psp to r0
         "isb",                    // sync barrier

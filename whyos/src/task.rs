@@ -1,4 +1,4 @@
-use core::{cell::UnsafeCell, mem::{self, MaybeUninit}, ptr};
+use core::{mem, ptr};
 
 
 pub const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
@@ -12,15 +12,56 @@ pub enum TaskState {
     Ready,
     Running,
     Blocked,
-    Suspended
+    Suspended // todo: the suspend mechanism
 }
 
 #[derive(Clone, Copy)]
 pub struct Tcb { // task control block
-    pub sp: u32,
+    pub sp: usize,
     pub state: TaskState,
     pub priority: u8, // lower number = higher priority
-    pub wakeup_time: u64
+    pub wakeup_time: u64,
+    pub stack_base: usize,
+    pub stack_size: usize,
+}
+
+impl Tcb {
+    pub const fn new(sp: usize, priority: u8, stack_base: usize, stack_size: usize) -> Self {
+        Self {
+            sp,
+            state: TaskState::Ready,
+            priority,
+            wakeup_time: 0,
+            stack_base,
+            stack_size
+        }
+    }
+
+    // creates INVALID Tcb
+    pub const fn default() -> Self {
+        Self {
+            sp: 0,
+            state: TaskState::Ready,
+            priority: u8::MAX,
+            wakeup_time: 0,
+            stack_base: 0,
+            stack_size: 0
+        }
+    }
+}
+
+pub unsafe fn init_stack(
+    stack_start: *mut u8,
+    size: usize,
+    entry_point: TaskEntryPoint
+) -> usize {
+    let stack_top = unsafe { stack_start.add(size) };
+
+    let init_frame = InitStackFrame::new(entry_point);
+    let frame_ptr = (stack_top as usize - mem::size_of::<InitStackFrame>()) as *mut InitStackFrame;
+    unsafe { ptr::write(frame_ptr, init_frame) };
+
+    frame_ptr as usize
 }
 
 #[repr(C)]
@@ -70,30 +111,3 @@ impl HwStackFrame {
 #[repr(C)]
 #[derive(Debug, Default)]
 struct SwStackFrame([u32; 8]); // R4-R11, popped manually in PendSV
-
-#[repr(C, align(8))]
-pub struct Stack<const SIZE: usize> {
-    data: UnsafeCell<MaybeUninit<[u8; SIZE]>>, //
-}
-
-unsafe impl<const S: usize> Sync for Stack<S> {}
-
-impl<const SIZE: usize> Stack<SIZE> {
-    pub const fn new() -> Self {
-        Self {
-            data: UnsafeCell::new(MaybeUninit::uninit()),
-        }
-    }
-
-    // fixme: api should be cleaner
-    pub fn init(&self, entry_point: TaskEntryPoint) -> u32 {
-        let stack_ptr = self.data.get() as *mut u8;
-        let stack_top = unsafe { stack_ptr.add(SIZE) };
-
-        let init_frame = InitStackFrame::new(entry_point);
-        let frame_ptr = (stack_top as usize - mem::size_of::<InitStackFrame>()) as *mut InitStackFrame;
-
-        unsafe { ptr::write(frame_ptr, init_frame) };
-        frame_ptr as u32
-    }
-}

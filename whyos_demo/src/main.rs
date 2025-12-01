@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use whyos::{Semaphore, Stack};
+use whyos::{Semaphore};
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{self, Ordering};
@@ -17,10 +17,6 @@ use defmt_rtt as _;
 pub static IMAGE_DEF: ImageDef = ImageDef::secure_exe();
 
 const XTAL_FREQ_HZ: u32 = 12_000_000u32; // 12 MHz
-
-static STACK_1: Stack<4096> = Stack::new();
-static STACK_2: Stack<4096> = Stack::new();
-static STACK_3: Stack<4096> = Stack::new();
 
 static SIGNAL: Semaphore = Semaphore::new(0, 1);
 
@@ -69,8 +65,8 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    whyos::add_task(&STACK_1, task_1, 1);
-    whyos::add_task(&STACK_2, task_2, 2);
+    whyos::add_task(task_1, 1, 4096);
+    whyos::add_task(task_2, 2, 4096);
     //whyos::add_task(&STACK_3, task_3, 3);
 
     let mut syst = core.SYST;
