@@ -1,8 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, ops::{Deref, DerefMut}};
 use critical_section::Mutex as CSMutex;
 
-use crate::scheduler::{self, MAX_TASKS};
-
+use crate::{itc::WaitList, scheduler};
 
 pub struct Mutex<T> {
     data: UnsafeCell<T>,
@@ -12,7 +11,7 @@ pub struct Mutex<T> {
 struct MutexState {
     locked: bool,
     owner: Option<usize>,
-    waiting: [bool; MAX_TASKS] // task sets it's index to true if it's waiting
+    waiting: WaitList
 }
 
 impl MutexState {
@@ -20,7 +19,7 @@ impl MutexState {
         Self {
             locked: false,
             owner: None,
-            waiting: [false; MAX_TASKS]
+            waiting: WaitList::new()
         }
     }
 }
@@ -77,8 +76,9 @@ impl<T> Mutex<T> {
                     state.locked = true;
                     state.owner = Some(curr_tid);
                     resource_acquired = true;
+
                 } else { // we have to wait
-                    state.waiting[curr_tid] = true;
+                    state.waiting.add(curr_tid);
                     scheduler::block_current_task();
                 }
             });
@@ -100,22 +100,7 @@ impl<T> Mutex<T> {
             state.locked = false;
             state.owner = None;
 
-            let mut best_task: Option<usize> = None;
-            let mut best_prio = u8::MAX;
-
-            for tid in 1..MAX_TASKS { // todo: maybe linked-list instead of map?
-                if state.waiting[tid] {
-                    let prio = scheduler::get_task_priority(tid);
-
-                    if prio < best_prio {
-                        best_prio = prio;
-                        best_task = Some(tid);
-                    }
-                }
-            }
-
-            if let Some(tid) = best_task {
-                state.waiting[tid] = false;
+            if let Some(tid) = state.waiting.pop_highest_prio() {
                 scheduler::wake_task(tid);
                 woken = true;
             }

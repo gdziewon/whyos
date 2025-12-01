@@ -7,18 +7,17 @@ use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 use critical_section::Mutex;
 
-pub const MAX_TASKS: usize = 16;
+pub const MAX_TASKS: usize = 32; // this should stay hardcoded
 static IDLE_STACK: Stack<4096> = Stack::new();
 const IDLE_TID: usize = 0;
 
 pub struct KernelState {
-    pub tasks: [Tcb; MAX_TASKS], // todo: make it MaybeUninit array?
+    pub tasks: [Tcb; MAX_TASKS],
     pub current_task: usize,
     pub task_count: usize,
     pub system_ticks: u64
 }
 
-// todo: maybe RefCell can be removed somehow
 pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
     tasks: [Tcb { sp: 0, state: TaskState::Ready, priority: u8::MAX, wakeup_time: 0 }; MAX_TASKS],
     current_task: IDLE_TID,

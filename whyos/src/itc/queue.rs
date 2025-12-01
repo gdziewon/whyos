@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, mem::MaybeUninit};
 use critical_section::Mutex as CSMutex;
 
-use crate::scheduler::{self, MAX_TASKS};
+use crate::{itc::WaitList, scheduler};
 
 pub struct Queue<T, const N: usize> {
     data: UnsafeCell<MaybeUninit<[T; N]>>,
@@ -12,8 +12,8 @@ struct QueueState {
     count: usize,
     write_idx: usize,
     read_idx: usize,
-    prod_waiting: [bool; MAX_TASKS], // todo: linked list instead of bitmap! or optimize the bitmap
-    cons_waiting: [bool; MAX_TASKS]
+    prod_waiting: WaitList,
+    cons_waiting: WaitList
 }
 
 impl QueueState {
@@ -22,8 +22,8 @@ impl QueueState {
             count: 0,
             write_idx: 0,
             read_idx: 0,
-            prod_waiting: [false; MAX_TASKS],
-            cons_waiting: [false; MAX_TASKS]
+            prod_waiting: WaitList::new(),
+            cons_waiting: WaitList::new()
         }
     }
 }
@@ -50,7 +50,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                 if state.count == CAPACITY { // queue is full, cant send
                     scheduler::block_current_task();
                     let curr_tid = scheduler::get_current_tid();
-                    state.prod_waiting[curr_tid] = true;
+                    state.prod_waiting.add(curr_tid);
 
                 } else {
                     let val = item_slot.take().unwrap(); // unwrap is safe bcs we know we haven't sent it yet
@@ -66,23 +66,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                     state.write_idx = (state.write_idx + 1) % CAPACITY;
                     state.count += 1;
 
-
-                    let mut best_task: Option<usize> = None;
-                    let mut best_prio = u8::MAX;
-
-                    for tid in 1..MAX_TASKS {
-                        if state.cons_waiting[tid] {
-                            let prio = scheduler::get_task_priority(tid);
-
-                            if prio < best_prio {
-                                best_prio = prio;
-                                best_task = Some(tid);
-                            }
-                        }
-                    }
-
-                    if let Some(tid) = best_task {
-                        state.cons_waiting[tid] = false;
+                    if let Some(tid) = state.cons_waiting.pop_highest_prio() {
                         scheduler::wake_task(tid);
                         woken = true;
                     }
@@ -112,7 +96,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                 if state.count == 0 { // no data to receive = block
                     scheduler::block_current_task();
                     let curr_tid = scheduler::get_current_tid();
-                    state.cons_waiting[curr_tid] = true;
+                    state.cons_waiting.add(curr_tid);
 
                 } else { // get data
 
@@ -128,22 +112,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                     state.read_idx = (state.read_idx + 1) % CAPACITY;
                     state.count -= 1;
 
-                    let mut best_task: Option<usize> = None;
-                    let mut best_prio = u8::MAX;
-
-                    for tid in 1..MAX_TASKS {
-                        if state.prod_waiting[tid] {
-                            let prio = scheduler::get_task_priority(tid);
-
-                            if prio < best_prio {
-                                best_prio = prio;
-                                best_task = Some(tid);
-                            }
-                        }
-                    }
-
-                    if let Some(tid) = best_task {
-                        state.prod_waiting[tid] = false;
+                    if let Some(tid) = state.prod_waiting.pop_highest_prio() {
                         scheduler::wake_task(tid);
                         woken = true;
                     }

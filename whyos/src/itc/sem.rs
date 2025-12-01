@@ -2,7 +2,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex as CSMutex;
 
-use crate::scheduler::{self, MAX_TASKS};
+use crate::{itc::WaitList, scheduler};
 
 pub struct Semaphore {
     state: CSMutex<RefCell<SemState>>
@@ -11,15 +11,17 @@ pub struct Semaphore {
 struct SemState {
     permits: usize,
     capacity: usize,
-    waiting: [bool; MAX_TASKS] // todo: let's focus on MAX_TASKS=32, change the array to u32 value
+    waiting: WaitList
 }
+
+unsafe impl Sync for Semaphore {}
 
 impl SemState {
     const fn new(init_permits: usize, capacity: usize) -> Self {
         Self {
             permits: init_permits,
             capacity,
-            waiting: [false; MAX_TASKS]
+            waiting: WaitList::new()
         }
     }
 }
@@ -43,7 +45,7 @@ impl Semaphore {
 
                 } else { // NO PERMITS
                     let curr_tid = scheduler::get_current_tid();
-                    state.waiting[curr_tid] = true;
+                    state.waiting.add(curr_tid);
                     scheduler::block_current_task();
                 }
             });
@@ -65,22 +67,7 @@ impl Semaphore {
                 state.permits += 1;
             }
 
-            let mut best_task: Option<usize> = None;
-            let mut best_prio = u8::MAX;
-
-            for tid in 1..MAX_TASKS {
-                if state.waiting[tid] {
-                    let prio = scheduler::get_task_priority(tid);
-
-                    if prio < best_prio {
-                        best_prio = prio;
-                        best_task = Some(tid);
-                    }
-                }
-            }
-
-            if let Some(tid) = best_task {
-                state.waiting[tid] = false;
+            if let Some(tid) = state.waiting.pop_highest_prio() {
                 scheduler::wake_task(tid);
                 woken = true;
             }
