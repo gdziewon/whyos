@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use whyos::{Queue, Stack};
+use whyos::{Semaphore, Stack};
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{self, Ordering};
@@ -22,30 +22,26 @@ static STACK_1: Stack<4096> = Stack::new();
 static STACK_2: Stack<4096> = Stack::new();
 static STACK_3: Stack<4096> = Stack::new();
 
-static DATA_QUEUE: whyos::Queue<u32, 3> = Queue::new();
+static SIGNAL: Semaphore = Semaphore::new(0, 1);
 
 extern "C" fn task_1() -> ! {
-    let mut counter = 0;
     loop {
-        info!("Task1: sending {}...", counter);
+        info!("WAITER: waiting.");
 
-        DATA_QUEUE.send(counter);
+        SIGNAL.wait();
 
-        info!("Task1: sent {}!", counter);
-
-        counter += 1;
-        whyos::sleep(500);
+        info!("WAITER: GOT SIGNAL!");
+        whyos::sleep(200);
     }
 }
 
 extern "C" fn task_2() -> ! {
     loop {
-        info!("Task2: Waiting for data...");
+        info!("SIGNALER: sleep");
+        whyos::sleep(1000);
 
-        let val = DATA_QUEUE.receive();
-
-        info!("Task2: Received {}", val);
-        whyos::sleep(2000);
+        info!("SIGNALER: signaling!");
+        SIGNAL.signal();
     }
 }
 

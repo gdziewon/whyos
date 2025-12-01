@@ -5,7 +5,7 @@ mod task;
 mod itc;
 
 pub use task::Stack;
-pub use itc::{Mutex, Queue};
+pub use itc::{Mutex, Queue, Semaphore};
 use task::{TaskEntryPoint, Tcb, TaskState};
 
 use scheduler::{KERNEL, MAX_TASKS, config_systick, init_idle_task};
