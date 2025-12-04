@@ -1,6 +1,5 @@
 use core::{mem, ptr};
 
-
 pub const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
 const XPSR_THUMB: u32 = 0x01000000;
 
@@ -47,6 +46,59 @@ impl Tcb {
             stack_base: 0,
             stack_size: 0
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct TaskList(pub(crate) u32); // because MAX_TASKS=32, each bit is representing a task
+
+impl TaskList {
+    pub const fn new() -> Self {
+        Self(0)
+    }
+
+    pub const fn from(value: u32) -> Self {
+        Self(value)
+    }
+
+    #[inline]
+    pub fn add(&mut self, tid: usize) {
+        self.0 |= 1 << tid;
+    }
+
+    #[inline]
+    pub fn remove(&mut self, tid: usize) {
+        self.0 &= !(1 << tid);
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn iter(self) -> TaskListIter {
+        TaskListIter { mask: self.0 }
+    }
+}
+
+pub struct TaskListIter {
+    mask: u32,
+}
+
+impl Iterator for TaskListIter {
+    type Item = usize;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.mask == 0 {
+            return None;
+        }
+
+        let tid = self.mask.trailing_zeros();
+
+        self.mask &= !(1 << tid);
+
+        Some(tid as usize)
     }
 }
 

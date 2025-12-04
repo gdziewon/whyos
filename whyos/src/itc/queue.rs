@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, mem::MaybeUninit};
 use critical_section::Mutex as CSMutex;
 
-use crate::{itc::WaitList, scheduler};
+use crate::{task::TaskList, scheduler, itc::pop_highest_prio};
 
 pub struct Queue<T, const N: usize> {
     data: UnsafeCell<MaybeUninit<[T; N]>>,
@@ -12,8 +12,8 @@ struct QueueState {
     count: usize,
     write_idx: usize,
     read_idx: usize,
-    prod_waiting: WaitList,
-    cons_waiting: WaitList
+    prod_waiting: TaskList,
+    cons_waiting: TaskList
 }
 
 impl QueueState {
@@ -22,8 +22,8 @@ impl QueueState {
             count: 0,
             write_idx: 0,
             read_idx: 0,
-            prod_waiting: WaitList::new(),
-            cons_waiting: WaitList::new()
+            prod_waiting: TaskList::new(),
+            cons_waiting: TaskList::new()
         }
     }
 }
@@ -66,7 +66,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                     state.write_idx = (state.write_idx + 1) % CAPACITY;
                     state.count += 1;
 
-                    if let Some(tid) = state.cons_waiting.pop_highest_prio() {
+                    if let Some(tid) = pop_highest_prio(&mut state.cons_waiting) {
                         scheduler::wake_task(tid);
                         woken = true;
                     }
@@ -112,7 +112,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                     state.read_idx = (state.read_idx + 1) % CAPACITY;
                     state.count -= 1;
 
-                    if let Some(tid) = state.prod_waiting.pop_highest_prio() {
+                    if let Some(tid) = pop_highest_prio(&mut state.prod_waiting) {
                         scheduler::wake_task(tid);
                         woken = true;
                     }

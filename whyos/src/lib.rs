@@ -22,13 +22,13 @@ pub fn add_task(entry: TaskEntryPoint, priority: u8, stack_size: usize) {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
 
-        if kernel.task_count >= MAX_TASKS {
+        let free_tid = (!kernel.allocated.0).trailing_zeros() as usize;
+        if free_tid >= MAX_TASKS {
             panic!("WhyOS: Max tasks reached");
         }
 
-        let idx = kernel.task_count;
-        kernel.tasks[idx] = Tcb::new(sp, priority, stack.ptr as usize, stack.size);
-        kernel.task_count += 1;
+        kernel.allocated.add(free_tid);
+        kernel.tasks[free_tid] = Tcb::new(sp, priority, stack.ptr as usize, stack.size);
     });
 }
 

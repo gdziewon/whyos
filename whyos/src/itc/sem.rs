@@ -2,7 +2,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex as CSMutex;
 
-use crate::{itc::WaitList, scheduler};
+use crate::{task::TaskList, scheduler, itc::pop_highest_prio};
 
 pub struct Semaphore {
     state: CSMutex<RefCell<SemState>>
@@ -11,7 +11,7 @@ pub struct Semaphore {
 struct SemState {
     permits: usize,
     capacity: usize,
-    waiting: WaitList
+    waiting: TaskList
 }
 
 unsafe impl Sync for Semaphore {}
@@ -21,7 +21,7 @@ impl SemState {
         Self {
             permits: init_permits,
             capacity,
-            waiting: WaitList::new()
+            waiting: TaskList::new()
         }
     }
 }
@@ -67,7 +67,7 @@ impl Semaphore {
                 state.permits += 1;
             }
 
-            if let Some(tid) = state.waiting.pop_highest_prio() {
+            if let Some(tid) = pop_highest_prio(&mut state.waiting) {
                 scheduler::wake_task(tid);
                 woken = true;
             }

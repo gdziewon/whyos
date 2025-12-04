@@ -1,7 +1,6 @@
 
-use crate::{memory, task};
-
-use super::task::{EXC_RETURN_THREAD_PSP, Tcb, TaskState};
+use crate::memory;
+use crate::task::{self, EXC_RETURN_THREAD_PSP, Tcb, TaskState, TaskList};
 
 use core::{arch::naked_asm, cell::RefCell};
 use cortex_m::peripheral::SCB;
@@ -15,14 +14,15 @@ const IDLE_STACK_SIZE: usize = 4096; // todo: might be too much
 pub struct KernelState {
     pub tasks: [Tcb; MAX_TASKS],
     pub current_task: usize,
-    pub task_count: usize,
-    pub system_ticks: u64
+    pub system_ticks: u64,
+
+    pub allocated: TaskList // who exists
 }
 
 pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
     tasks: [Tcb::default(); MAX_TASKS],
     current_task: IDLE_TID,
-    task_count: 1, // first spot reserved for idle task
+    allocated: TaskList::from(1 << IDLE_TID), // first spot reserved for idle task
     system_ticks: 0
 }));
 
@@ -103,30 +103,20 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         // save old sp
         let current = kernel.current_task;
         kernel.tasks[current].sp = old_sp;
+        if kernel.tasks[current].state == TaskState::Running {
+            kernel.tasks[current].state = TaskState::Ready;
+        }
 
         // if ready task isn't found, fallback to idle task
         let mut best_task = IDLE_TID;
         let mut best_prio = u8::MAX;
 
-        for i in 1..=kernel.task_count {
-            let tid = (current + i) % kernel.task_count; // priority + round robin for prio ties
-
-            // needed in case if user defines task with priority 255, idle task should never win ties in this case
-            if tid == IDLE_TID { continue; } // todo: look for better design
-
+        for tid in kernel.allocated.iter() {
             let task = &kernel.tasks[tid];
-
-            if task.state == TaskState::Ready {
-                if task.priority <= best_prio {
-                    best_prio = task.priority;
-                    best_task = tid;
-                }
+            if task.state == TaskState::Ready && task.priority <= best_prio {
+                best_prio = task.priority;
+                best_task = tid;
             }
-        }
-
-        let current = kernel.current_task;
-        if kernel.tasks[current].state == TaskState::Running {
-            kernel.tasks[current].state = TaskState::Ready;
         }
 
         kernel.current_task = best_task;
@@ -180,10 +170,9 @@ fn SysTick() {
         kernel.system_ticks += 1;
         let now = kernel.system_ticks;
 
-        for i in 1..kernel.task_count { // skip idle
-            let task = &mut kernel.tasks[i];
+        for tid in kernel.allocated.iter() {
+            let task = &mut kernel.tasks[tid];
 
-            // wake up sleeping task if its time
             if task.state == TaskState::Blocked && task.wakeup_time <= now {
                 task.state = TaskState::Ready;
             }
