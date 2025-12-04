@@ -62,7 +62,7 @@ pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
     })
 }
 
-pub fn dealloc(ptr: *mut u8, size: usize) {
+pub unsafe fn dealloc(ptr: *mut u8, size: usize) {
     critical_section::with(|cs| {
         let pool = unsafe { &mut *MEMORY.borrow(cs).get() };
         let base_ptr = pool.buffer.as_mut_ptr() as *mut u8;

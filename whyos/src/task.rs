@@ -11,7 +11,9 @@ pub enum TaskState {
     Ready,
     Running,
     Blocked,
-    Suspended // todo: the suspend mechanism
+    Suspended, // todo: the suspend mechanism
+    Zombie,
+    Dead
 }
 
 #[derive(Clone, Copy)]
@@ -25,7 +27,7 @@ pub struct Tcb { // task control block
 }
 
 impl Tcb {
-    pub const fn new(sp: usize, priority: u8, stack_base: usize, stack_size: usize) -> Self {
+    pub const fn ready(sp: usize, priority: u8, stack_base: usize, stack_size: usize) -> Self {
         Self {
             sp,
             state: TaskState::Ready,
@@ -36,11 +38,10 @@ impl Tcb {
         }
     }
 
-    // creates INVALID Tcb
-    pub const fn default() -> Self {
+    pub const fn dead() -> Self {
         Self {
             sp: 0,
-            state: TaskState::Ready,
+            state: TaskState::Dead,
             priority: u8::MAX,
             wakeup_time: 0,
             stack_base: 0,
@@ -76,6 +77,7 @@ impl TaskList {
         self.0 == 0
     }
 
+    #[inline]
     pub fn iter(self) -> TaskListIter {
         TaskListIter { mask: self.0 }
     }

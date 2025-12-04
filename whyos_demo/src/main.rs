@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use whyos::{Semaphore};
+use whyos::{Mutex, Semaphore};
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{self, Ordering};
@@ -18,34 +18,26 @@ pub static IMAGE_DEF: ImageDef = ImageDef::secure_exe();
 
 const XTAL_FREQ_HZ: u32 = 12_000_000u32; // 12 MHz
 
-static SIGNAL: Semaphore = Semaphore::new(0, 1);
+static WORKER_NUM: Mutex<u32> = Mutex::new(0);
 
-extern "C" fn task_1() -> ! {
+#[unsafe(no_mangle)]
+extern "C" fn manager_task() -> ! {
+    info!("manager: start");
     loop {
-        info!("WAITER: waiting.");
-
-        SIGNAL.wait();
-
-        info!("WAITER: GOT SIGNAL!");
-        whyos::sleep(200);
+        info!("manager: What's up worker?");
+        whyos::add_task(worker_task, 2, 2048);
+        whyos::sleep(2000);
+        info!("manager: He was a good man, Rest in peace worker nr {}", *WORKER_NUM.lock());
+        *WORKER_NUM.lock() += 1;
     }
 }
 
-extern "C" fn task_2() -> ! {
-    loop {
-        info!("SIGNALER: sleep");
-        whyos::sleep(1000);
-
-        info!("SIGNALER: signaling!");
-        SIGNAL.signal();
-    }
-}
-
-extern "C" fn task_3() -> ! {
-    loop {
-        info!("I'm task3 !");
-        whyos::sleep(700 * 5);
-    }
+#[unsafe(no_mangle)]
+extern "C" fn worker_task() -> ! {
+    info!("worker: Hi! I'm worker nr {}. I am alive and well, thank you for asking", *WORKER_NUM.lock());
+    whyos::sleep(500);
+    info!("worker: I should leave anyway, see you soon");
+    whyos::exit();
 }
 
 #[hal::entry]
@@ -65,9 +57,7 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    whyos::add_task(task_1, 1, 4096);
-    whyos::add_task(task_2, 2, 4096);
-    //whyos::add_task(&STACK_3, task_3, 3);
+    whyos::add_task(manager_task, 1, 4096);
 
     let mut syst = core.SYST;
     let sys_freq = clocks.system_clock.freq().to_Hz();

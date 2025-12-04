@@ -2,6 +2,7 @@
 use crate::memory;
 use crate::task::{self, EXC_RETURN_THREAD_PSP, Tcb, TaskState, TaskList};
 
+use core::ptr;
 use core::{arch::naked_asm, cell::RefCell};
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
@@ -16,19 +17,54 @@ pub struct KernelState {
     pub current_task: usize,
     pub system_ticks: u64,
 
-    pub allocated: TaskList // who exists
+    pub allocated: TaskList, // who exists
+    pub ready: TaskList, // wants CPU
+    pub sleeping: TaskList, // waiting for time
+    pub zombies: TaskList
 }
 
 pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
-    tasks: [Tcb::default(); MAX_TASKS],
+    tasks: [Tcb::dead(); MAX_TASKS],
     current_task: IDLE_TID,
+    system_ticks: 0,
     allocated: TaskList::from(1 << IDLE_TID), // first spot reserved for idle task
-    system_ticks: 0
+    ready: TaskList::from(1 << IDLE_TID),
+    sleeping: TaskList::new(),
+    zombies: TaskList::new()
 }));
+
+pub fn reap_zombies() -> bool {
+    let mut reaped = false;
+
+    critical_section::with(|cs| {
+        let mut kernel = KERNEL.borrow(cs).borrow_mut();
+
+        for tid in kernel.zombies.iter() {
+            let task = &mut kernel.tasks[tid];
+
+            let ptr = task.stack_base as *mut u8;
+            let size = task.stack_size;
+
+            if ptr != ptr::null_mut() && size > 0 {
+                unsafe { memory::dealloc(ptr, size); }
+            }
+
+            kernel.zombies.remove(tid);
+            kernel.allocated.remove(tid);
+
+            kernel.tasks[tid] = Tcb::dead();
+
+            reaped = true;
+        }
+    });
+
+    reaped
+}
 
 pub fn init_idle_task() { // idle task is ran when every other task can't
     extern "C" fn idle_task() -> ! {
         loop {
+            reap_zombies();
             cortex_m::asm::wfi();
         }
     }
@@ -42,7 +78,7 @@ pub fn init_idle_task() { // idle task is ran when every other task can't
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        kernel.tasks[IDLE_TID] = Tcb::new(sp, u8::MAX, stack.ptr as usize, stack.size);
+        kernel.tasks[IDLE_TID] = Tcb::ready(sp, u8::MAX, stack.ptr as usize, stack.size);
     });
 }
 
@@ -57,15 +93,22 @@ pub fn config_systick(syst: &mut cortex_m::peripheral::SYST, freq: u32) {
 pub fn block_current_task() {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
+
         let current = kernel.current_task;
         kernel.tasks[current].state = TaskState::Blocked;
+
+        kernel.ready.remove(current);
     });
 }
 
 pub fn wake_task(tid: usize) {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
+
         kernel.tasks[tid].state = TaskState::Ready;
+
+        kernel.ready.add(tid);
+        kernel.sleeping.remove(tid);
     });
 }
 
@@ -111,10 +154,11 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         let mut best_task = IDLE_TID;
         let mut best_prio = u8::MAX;
 
-        for tid in kernel.allocated.iter() {
-            let task = &kernel.tasks[tid];
-            if task.state == TaskState::Ready && task.priority <= best_prio {
-                best_prio = task.priority;
+        for tid in kernel.ready.iter() {
+            let prio = kernel.tasks[tid].priority;
+
+            if prio <= best_prio {
+                best_prio = prio;
                 best_task = tid;
             }
         }
@@ -170,11 +214,14 @@ fn SysTick() {
         kernel.system_ticks += 1;
         let now = kernel.system_ticks;
 
-        for tid in kernel.allocated.iter() {
+        for tid in kernel.sleeping.iter() {
             let task = &mut kernel.tasks[tid];
 
-            if task.state == TaskState::Blocked && task.wakeup_time <= now {
+            if task.wakeup_time <= now {
                 task.state = TaskState::Ready;
+
+                kernel.sleeping.remove(tid);
+                kernel.ready.add(tid);
             }
         }
     });
