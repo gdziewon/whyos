@@ -1,19 +1,68 @@
 use core::{mem, ptr};
 
+use crate::WhyError;
+
 pub const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
 const XPSR_THUMB: u32 = 0x01000000;
 
 pub type TaskEntryPoint = extern "C" fn() -> !;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ResumeContext {
+    Ready,
+    Blocked,
+    Sleeping,
+}
+
 // inspired by https://freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/02-Task-states
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum TaskState {
     Ready,
     Running,
     Blocked,
-    Suspended, // todo: the suspend mechanism
+    Sleeping,
+    Suspended(ResumeContext),
     Zombie,
     Dead
+}
+
+impl From<ResumeContext> for TaskState {
+    #[inline]
+    fn from(value: ResumeContext) -> Self {
+        match value {
+            ResumeContext::Ready => TaskState::Ready,
+            ResumeContext::Blocked => TaskState::Blocked,
+            ResumeContext::Sleeping => TaskState::Sleeping,
+        }
+    }
+}
+
+impl TryFrom<TaskState> for ResumeContext {
+    type Error = WhyError;
+
+    #[inline]
+    fn try_from(value: TaskState) -> Result<Self, Self::Error> {
+        use TaskState as TS;
+        use ResumeContext as RCTX;
+        match value {
+            TS::Ready | TaskState::Running => Ok(RCTX::Ready),
+            TS::Blocked => Ok(RCTX::Blocked),
+            TS::Sleeping => Ok(RCTX::Sleeping),
+            _ => Err(WhyError::InvalidOperation)
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, defmt::Format)]
+#[repr(transparent)]
+pub struct TaskId(pub(crate) usize);
+
+impl TaskId {
+    #[inline]
+    pub fn id(&self) -> usize {
+        self.0
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -75,6 +124,11 @@ impl TaskList {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.0 == 0
+    }
+
+    #[inline]
+    pub fn is_set(&self, pos: usize) -> bool {
+        (self.0 & (1 << pos)) != 0
     }
 
     #[inline]

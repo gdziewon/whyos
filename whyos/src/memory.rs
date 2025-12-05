@@ -1,4 +1,4 @@
-use core::{cell::UnsafeCell, mem::MaybeUninit, u64};
+use core::{cell::UnsafeCell, mem::MaybeUninit};
 
 use critical_section::Mutex;
 
@@ -28,10 +28,10 @@ pub struct MemChunk {
 
 // rounds up the size to multiple of 1024 (kb)
 pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
-    let blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    let blocks = size.div_ceil(BLOCK_SIZE);
 
     if blocks == 0 || blocks > POOL_SIZE {
-        return None;
+        return None; // todo: return result here?
     }
 
     let search_mask: u64 = if blocks == 64 {
@@ -55,7 +55,7 @@ pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
                 let alloc_ptr = unsafe { base_ptr.add(start_offset) };
 
                 let size = blocks * BLOCK_SIZE;
-                return Some(MemChunk { ptr: alloc_ptr, size: size});
+                return Some(MemChunk { ptr: alloc_ptr, size});
             }
         }
         None
@@ -70,7 +70,7 @@ pub unsafe fn dealloc(ptr: *mut u8, size: usize) {
         let offset = ptr as usize - base_ptr as usize;
         let start_bit = offset / BLOCK_SIZE;
 
-        let blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        let blocks = size.div_ceil(BLOCK_SIZE);
 
         let mask = if blocks == 64 {
             u64::MAX

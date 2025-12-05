@@ -1,15 +1,15 @@
 
 use crate::memory;
-use crate::task::{self, EXC_RETURN_THREAD_PSP, Tcb, TaskState, TaskList};
+use crate::task::{self, EXC_RETURN_THREAD_PSP, ResumeContext, TaskList, TaskState, Tcb};
 
-use core::ptr;
 use core::{arch::naked_asm, cell::RefCell};
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 use critical_section::Mutex;
+use defmt::warn;
 
 pub const MAX_TASKS: usize = 32; // this should stay hardcoded
-const IDLE_TID: usize = 0;
+pub const IDLE_TID: usize = 0;
 const IDLE_STACK_SIZE: usize = 4096; // todo: might be too much
 
 pub struct KernelState {
@@ -45,7 +45,7 @@ pub fn reap_zombies() -> bool {
             let ptr = task.stack_base as *mut u8;
             let size = task.stack_size;
 
-            if ptr != ptr::null_mut() && size > 0 {
+            if !ptr.is_null() && size > 0 {
                 unsafe { memory::dealloc(ptr, size); }
             }
 
@@ -104,11 +104,20 @@ pub fn block_current_task() {
 pub fn wake_task(tid: usize) {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
+        let task = &mut kernel.tasks[tid];
 
-        kernel.tasks[tid].state = TaskState::Ready;
+        match task.state {
+            TaskState::Blocked => {
+                task.state = TaskState::Ready;
+                kernel.ready.add(tid);
+                kernel.sleeping.remove(tid);
+            },
+            TaskState::Suspended(ResumeContext::Blocked) => {
+                task.state = TaskState::Suspended(ResumeContext::Ready);
+            },
+            _ => { warn!("WhyOS: Waking non blocked task, should never happen")}
+        }
 
-        kernel.ready.add(tid);
-        kernel.sleeping.remove(tid);
     });
 }
 

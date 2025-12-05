@@ -25,7 +25,7 @@ extern "C" fn manager_task() -> ! {
     info!("manager: start");
     loop {
         info!("manager: What's up worker?");
-        whyos::add_task(worker_task, 2, 2048);
+        whyos::add_task(worker_task, 2, 2048).unwrap();
         whyos::sleep(2000);
         info!("manager: He was a good man, Rest in peace worker nr {}", *WORKER_NUM.lock());
         *WORKER_NUM.lock() += 1;
@@ -57,7 +57,7 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    whyos::add_task(manager_task, 1, 4096);
+    whyos::add_task(manager_task, 1, 4096).unwrap();
 
     let mut syst = core.SYST;
     let sys_freq = clocks.system_clock.freq().to_Hz();
