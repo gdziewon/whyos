@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, mem::MaybeUninit};
 use critical_section::Mutex as CSMutex;
 
-use crate::{task::TaskList, scheduler, itc::pop_highest_prio};
+use crate::{task::TaskMap, scheduler, itc::pop_highest_prio};
 
 pub struct Queue<T, const N: usize> {
     data: UnsafeCell<MaybeUninit<[T; N]>>,
@@ -12,8 +12,8 @@ struct QueueState {
     count: usize,
     write_idx: usize,
     read_idx: usize,
-    prod_waiting: TaskList,
-    cons_waiting: TaskList
+    prod_waiting: TaskMap,
+    cons_waiting: TaskMap
 }
 
 impl QueueState {
@@ -22,8 +22,8 @@ impl QueueState {
             count: 0,
             write_idx: 0,
             read_idx: 0,
-            prod_waiting: TaskList::new(),
-            cons_waiting: TaskList::new()
+            prod_waiting: TaskMap::new(),
+            cons_waiting: TaskMap::new()
         }
     }
 }

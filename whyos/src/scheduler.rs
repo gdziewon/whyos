@@ -1,6 +1,6 @@
 
 use crate::memory;
-use crate::task::{self, EXC_RETURN_THREAD_PSP, ResumeContext, TaskList, TaskState, Tcb};
+use crate::task::{self, EXC_RETURN_THREAD_PSP, ResumeContext, TaskMap, TaskState, Tcb};
 
 use core::{arch::naked_asm, cell::RefCell};
 use cortex_m::peripheral::SCB;
@@ -17,20 +17,20 @@ pub struct KernelState {
     pub current_task: usize,
     pub system_ticks: u64,
 
-    pub allocated: TaskList, // who exists
-    pub ready: TaskList, // wants CPU
-    pub sleeping: TaskList, // waiting for time
-    pub zombies: TaskList
+    pub allocated: TaskMap, // who exists
+    pub ready: TaskMap, // wants CPU
+    pub sleeping: TaskMap, // waiting for time
+    pub zombies: TaskMap
 }
 
 pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
     tasks: [Tcb::dead(); MAX_TASKS],
     current_task: IDLE_TID,
     system_ticks: 0,
-    allocated: TaskList::from(1 << IDLE_TID), // first spot reserved for idle task
-    ready: TaskList::from(1 << IDLE_TID),
-    sleeping: TaskList::new(),
-    zombies: TaskList::new()
+    allocated: TaskMap::from(1 << IDLE_TID), // first spot reserved for idle task
+    ready: TaskMap::from(1 << IDLE_TID),
+    sleeping: TaskMap::new(),
+    zombies: TaskMap::new()
 }));
 
 pub fn reap_zombies() -> bool {
@@ -163,10 +163,11 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         let mut best_task = IDLE_TID;
         let mut best_prio = u8::MAX;
 
-        for tid in kernel.ready.iter() {
+        // start searching from (current + 1) for round robin
+        let start = (kernel.current_task + 1) & (MAX_TASKS - 1);
+        for tid in unsafe { kernel.ready.iter_from(start) } {
             let prio = kernel.tasks[tid].priority;
-
-            if prio <= best_prio {
+            if prio < best_prio {
                 best_prio = prio;
                 best_task = tid;
             }

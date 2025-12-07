@@ -6,9 +6,9 @@ pub use mutex::Mutex;
 pub use queue::Queue;
 pub use sem::Semaphore;
 
-use crate::{scheduler, task::TaskList};
+use crate::{scheduler, task::TaskMap};
 
-fn pop_highest_prio(list: &mut TaskList) -> Option<usize> {
+fn pop_highest_prio(list: &mut TaskMap) -> Option<usize> {
     if list.is_empty() {
         return None;
     }

@@ -2,7 +2,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex as CSMutex;
 
-use crate::{task::TaskList, scheduler, itc::pop_highest_prio};
+use crate::{task::TaskMap, scheduler, itc::pop_highest_prio};
 
 pub struct Semaphore {
     state: CSMutex<RefCell<SemState>>
@@ -11,7 +11,7 @@ pub struct Semaphore {
 struct SemState {
     permits: usize,
     capacity: usize,
-    waiting: TaskList
+    waiting: TaskMap
 }
 
 unsafe impl Sync for Semaphore {}
@@ -21,7 +21,7 @@ impl SemState {
         Self {
             permits: init_permits,
             capacity,
-            waiting: TaskList::new()
+            waiting: TaskMap::new()
         }
     }
 }
