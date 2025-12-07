@@ -1,6 +1,7 @@
 
 use crate::memory;
-use crate::task::{self, EXC_RETURN_THREAD_PSP, ResumeContext, TaskMap, TaskState, Tcb};
+use crate::task::{self, EXC_RETURN_THREAD_PSP, ResumeContext, TaskMap, TaskState, Tcb, TaskId};
+use crate::error::{WhyResult, WhyError};
 
 use core::{arch::naked_asm, cell::RefCell};
 use cortex_m::peripheral::SCB;
@@ -32,6 +33,32 @@ pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelS
     sleeping: TaskMap::new(),
     zombies: TaskMap::new()
 }));
+
+pub fn add_task(entry: task::TaskEntryPoint, name: Option<&'static str>, priority: u8, stack_size: usize) -> WhyResult<TaskId> {
+    let stack = match memory::alloc(stack_size) {
+        Some(mem) => mem,
+        None => {
+            reap_zombies();
+            memory::alloc(stack_size).ok_or(WhyError::OutOfMemory)?
+        }
+    };
+
+    let sp = unsafe { task::init_stack(stack.ptr, stack.size, entry)};
+
+    critical_section::with(|cs| {
+        let mut kernel = KERNEL.borrow(cs).borrow_mut();
+
+        let tid = (!kernel.allocated.0).trailing_zeros() as usize;
+        if tid >= MAX_TASKS {
+            return Err(WhyError::MaxTasksReached);
+        }
+
+        kernel.allocated.add(tid);
+        kernel.ready.add(tid);
+        kernel.tasks[tid] = Tcb::ready(name, sp, priority, stack.ptr as usize, stack.size);
+        Ok(TaskId(tid))
+    })
+}
 
 pub fn reap_zombies() -> bool {
     let mut reaped = false;
@@ -78,7 +105,7 @@ pub fn init_idle_task() { // idle task is ran when every other task can't
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        kernel.tasks[IDLE_TID] = Tcb::ready(sp, u8::MAX, stack.ptr as usize, stack.size);
+        kernel.tasks[IDLE_TID] = Tcb::ready(Some("idle"), sp, u8::MAX, stack.ptr as usize, stack.size);
     });
 }
 
@@ -164,7 +191,7 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         let mut best_prio = u8::MAX;
 
         // start searching from (current + 1) for round robin
-        let start = (kernel.current_task + 1) & (MAX_TASKS - 1);
+        let start = (kernel.current_task + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
         for tid in unsafe { kernel.ready.iter_from(start) } {
             let prio = kernel.tasks[tid].priority;
             if prio < best_prio {

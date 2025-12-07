@@ -13,7 +13,7 @@ extern "C" fn manager_task() -> ! {
     info!("manager: start");
     loop {
         info!("manager: What's up worker?");
-        whyos::add_task(worker_task, 2, 2048).unwrap();
+        whyos::spawn_with_priority(worker_task, 2).unwrap();
         whyos::sleep(2000);
         info!("manager: He was a good man, Rest in peace worker nr {}", *WORKER_NUM.lock());
         *WORKER_NUM.lock() += 1;
@@ -32,7 +32,7 @@ extern "C" fn worker_task() -> ! {
 fn main() -> ! {
     let (mut syst, freq) = board::init();
 
-    whyos::add_task(manager_task, 1, 4096).unwrap();
+    whyos::spawn_with_priority(manager_task, 1).unwrap();
 
     defmt::info!("Starting WhyOS");
     unsafe { whyos::start(&mut syst, freq / 1000); }

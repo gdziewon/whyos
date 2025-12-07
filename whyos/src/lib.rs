@@ -6,41 +6,72 @@ mod itc;
 mod memory;
 mod error;
 
-use defmt::error;
 pub use itc::{Mutex, Queue, Semaphore};
 pub use task::TaskId;
 
-use task::{TaskEntryPoint, Tcb, TaskState, ResumeContext};
+use task::{TaskEntryPoint, TaskState, ResumeContext};
 use error::{WhyError, WhyResult};
-use scheduler::{KERNEL, MAX_TASKS, config_systick, init_idle_task, IDLE_TID};
+use scheduler::{KERNEL, IDLE_TID};
 
-pub fn add_task(entry: TaskEntryPoint, priority: u8, stack_size: usize) -> WhyResult<TaskId> {
-    let stack = match memory::alloc(stack_size) {
-        Some(mem) => mem,
-        None => {
-            scheduler::reap_zombies();
-            memory::alloc(stack_size).ok_or(WhyError::OutOfMemory)?
-        }
-    };
-
-    let sp = unsafe { task::init_stack(stack.ptr, stack.size, entry)};
-
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-
-        let tid = (!kernel.allocated.0).trailing_zeros() as usize;
-        if tid >= MAX_TASKS {
-            return Err(WhyError::MaxTasksReached);
-        }
-
-        kernel.allocated.add(tid);
-        kernel.ready.add(tid);
-        kernel.tasks[tid] = Tcb::ready(sp, priority, stack.ptr as usize, stack.size);
-        Ok(TaskId(tid))
-    })
+pub struct TaskBuilder {
+    entry: TaskEntryPoint,
+    priority: u8,
+    stack_size: usize,
+    name: Option<&'static str>
 }
 
+impl TaskBuilder {
+    #[inline]
+    pub fn new(entry: TaskEntryPoint) -> Self {
+        Self {
+            entry,
+            priority: 128,
+            stack_size: 1024, // 1Kb
+            name: None,
+        }
+    }
+
+    #[inline]
+    pub fn priority(mut self, priority: u8) -> Self {
+        self.priority = priority;
+        self
+    }
+
+    #[inline]
+    pub fn stack_size(mut self, size: usize) -> Self {
+        self.stack_size = size;
+        self
+    }
+
+    #[inline]
+    pub fn name(mut self, name: &'static str) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    #[inline]
+    pub fn spawn(self) -> WhyResult<TaskId> {
+        scheduler::add_task(self.entry, self.name, self.priority, self.stack_size)
+    }
+}
+
+#[inline]
+pub fn spawn(entry: TaskEntryPoint) -> WhyResult<TaskId> {
+    TaskBuilder::new(entry).spawn()
+}
+
+#[inline]
+pub fn spawn_with_priority(entry: TaskEntryPoint, priority: u8) -> WhyResult<TaskId> {
+    TaskBuilder::new(entry).priority(priority).spawn()
+}
+
+#[inline]
 pub fn sleep(ticks: u64) {
+    if ticks == 0 {
+        scheduler::yield_now(); // just yield, dont sleep
+        return;
+    }
+
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
         let current = kernel.current_task;
@@ -57,9 +88,14 @@ pub fn sleep(ticks: u64) {
     scheduler::yield_now(); // immidietaly switch task
 }
 
+#[inline]
+pub fn yield_cpu() {
+    scheduler::yield_now();
+}
+
 pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! {
-    init_idle_task(); // todo: move it to KernelState initialization?
-    config_systick(syst, freq);
+    scheduler::init_idle_task();
+    scheduler::config_systick(syst, freq);
     unsafe {
         core::arch::asm!("svc 0", options(noreturn));
     }
@@ -79,23 +115,29 @@ pub fn exit() -> ! {
 
     scheduler::yield_now();
 
-    loop { cortex_m::asm::nop(); }
+    loop { cortex_m::asm::wfi(); }
 }
 
 pub fn suspend(tid: TaskId) -> WhyResult<()> {
-    critical_section::with(|cs| {
+    if tid.0 == IDLE_TID {
+        return Err(WhyError::InvalidOperation);
+    }
+
+    let should_yield = critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
 
+        let current = kernel.current_task;
         let tid = tid.0;
-        if tid == IDLE_TID || !kernel.allocated.is_set(tid) {
-            error!("TID IS NOT SET {}", tid);
-            return Err(WhyError::InvalidOperation); // fixme: invalid tid
+
+        if !kernel.allocated.is_set(tid) {
+            return Err(WhyError::InvalidTaskId);
         }
 
         let task = &mut kernel.tasks[tid];
 
+        // already suspended
         if let TaskState::Suspended(_) = task.state {
-            return Ok(());
+            return Ok(false);
         }
 
         let ctx: ResumeContext = task.state.try_into()?;
@@ -104,55 +146,100 @@ pub fn suspend(tid: TaskId) -> WhyResult<()> {
         kernel.ready.remove(tid);
         kernel.sleeping.remove(tid);
 
-        Ok(())
+        Ok(tid == current)
     })?;
 
-    scheduler::yield_now();
+    if should_yield {
+        scheduler::yield_now();
+    }
     Ok(())
 }
 
-// todo: make some TID struct for correctness?
 pub fn resume(tid: TaskId) -> WhyResult<()> {
-    let mut woken = false;
+    if tid.0 == IDLE_TID {
+        return Err(WhyError::InvalidOperation);
+    }
 
-    critical_section::with(|cs| {
+    let should_yield = critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-
         let tid = tid.0;
-        if tid == IDLE_TID || !kernel.allocated.is_set(tid) {
-            return Err(WhyError::InvalidOperation); // fixme: invalid tid - TID struct?
+
+        if !kernel.allocated.is_set(tid) {
+            return Err(WhyError::InvalidTaskId);
         }
 
         let now = kernel.system_ticks;
         let task = &mut kernel.tasks[tid];
 
-        if let TaskState::Suspended(ctx) = task.state {
-            task.state = ctx.into(); // ResumeContext::Ready -> TaskState::Ready etc.
-            woken = true;
+        let TaskState::Suspended(ctx) = task.state else {
+            return Ok(false);
+        };
 
-            match ctx {
-                ResumeContext::Ready => kernel.ready.add(tid),
+        task.state = ctx.into(); // ResumeContext::Ready -> TaskState::Ready etc.
 
-                ResumeContext::Sleeping => {
-                    if task.wakeup_time <= now { // edge case for previously sleeping tasks
-                        task.state = TaskState::Ready;
-                        kernel.ready.add(tid);
+        match ctx {
+            ResumeContext::Ready => {
+                kernel.ready.add(tid);
+                Ok(true)
+            },
 
-                    } else {
-                        kernel.sleeping.add(tid);
-                        woken = false; // didn't actually wake up
-                    }
-                },
+            ResumeContext::Sleeping => {
+                if task.wakeup_time <= now { // sleep expired while suspended
+                    task.state = TaskState::Ready;
+                    kernel.ready.add(tid);
+                    Ok(true)
+                } else {
+                    kernel.sleeping.add(tid);
+                    Ok(false) // didn't wake up yet
+                }
+            },
 
-                ResumeContext::Blocked => {}, // Mutex will handle it
-            }
+            ResumeContext::Blocked => {
+                Ok(false) // mutex will handle it
+            },
         }
-
-        Ok(())
     })?;
 
-    if woken {
+    if should_yield {
         scheduler::yield_now();
     }
+
     Ok(())
+}
+
+#[inline]
+pub fn current_tid() -> TaskId {
+    critical_section::with(|cs| {
+        let kernel = KERNEL.borrow(cs).borrow();
+        TaskId(kernel.current_task)
+    })
+}
+
+#[inline]
+pub fn current_name() -> Option<&'static str> {
+    critical_section::with(|cs| {
+        let kernel = KERNEL.borrow(cs).borrow();
+        kernel.tasks[kernel.current_task].name
+    })
+}
+
+#[inline]
+pub fn uptime_ticks() -> u64 {
+    critical_section::with(|cs| {
+        let kernel = KERNEL.borrow(cs).borrow();
+        kernel.system_ticks
+    })
+}
+
+#[inline]
+pub fn task_count() -> usize {
+    critical_section::with(|cs| {
+        let kernel = KERNEL.borrow(cs).borrow();
+        kernel.allocated.ones()
+    })
+}
+
+#[inline]
+pub fn reclaim_memory() {
+    scheduler::reap_zombies();
 }

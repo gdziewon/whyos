@@ -65,36 +65,55 @@ impl<T> Mutex<T> {
     pub fn lock(&self) -> MutexGuard<'_, T> {
         // loop is needed since if the acquisition fails, task should check from the start
         loop {
-            // variable to track what to do after interrupts are enabled
-            let mut resource_acquired = false;
-
-            critical_section::with(|cs| {
+            let acquired = critical_section::with(|cs| {
                 let mut state = self.state.borrow(cs).borrow_mut();
                 let curr_tid = scheduler::get_current_tid();
 
                 if !state.locked { // success
                     state.locked = true;
                     state.owner = Some(curr_tid);
-                    resource_acquired = true;
+                    true
 
                 } else { // we have to wait
                     state.waiting.add(curr_tid);
                     scheduler::block_current_task();
+                    false
                 }
             });
 
-            if resource_acquired {
+            if acquired {
                 return MutexGuard { lock: self };
-            } else {
-                scheduler::yield_now()
             }
+
+            scheduler::yield_now();
         }
     }
 
-    fn release(&self) {
-        let mut woken = false;
-
+    #[inline]
+    pub fn try_lock(&self) -> Option<MutexGuard<'_, T>> {
         critical_section::with(|cs| {
+            let mut state = self.state.borrow(cs).borrow_mut();
+
+            if !state.locked {
+                let curr_tid = scheduler::get_current_tid();
+                state.locked = true;
+                state.owner = Some(curr_tid);
+                Some(MutexGuard { lock: self })
+            } else {
+                None
+            }
+        })
+    }
+
+    #[inline]
+    pub fn is_locked(&self) -> bool {
+        critical_section::with(|cs| {
+            self.state.borrow(cs).borrow().locked
+        })
+    }
+
+    fn release(&self) {
+        let someone_waiting = critical_section::with(|cs| {
             let mut state = self.state.borrow(cs).borrow_mut();
 
             state.locked = false;
@@ -102,12 +121,14 @@ impl<T> Mutex<T> {
 
             if let Some(tid) = pop_highest_prio(&mut state.waiting) {
                 scheduler::wake_task(tid);
-                woken = true;
+                true
+            } else {
+                false
             }
         });
 
         // we might've woke someone with bigger priority, if not then scheduler will let us continue anyway
-        if woken {
+        if someone_waiting {
             scheduler::yield_now();
         }
     }

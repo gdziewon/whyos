@@ -7,6 +7,7 @@ pub enum WhyError {
     MaxTasksReached,
     ResourceBusy, // todo: for try_lock
     InvalidOperation, // idk
+    InvalidTaskId
 }
 
 pub type WhyResult<T> = core::result::Result<T, WhyError>;

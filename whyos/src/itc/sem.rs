@@ -33,34 +33,56 @@ impl Semaphore {
         }
     }
 
+    pub const fn binary() -> Self {
+        Self::new(1, 1)
+    }
+
+    pub const fn counting(capacity: usize) -> Self {
+        Self::new(capacity, capacity)
+    }
+
     pub fn wait(&self) {
         loop {
-            let mut permitted = false;
-            critical_section::with(|cs| {
+            // yield if there are no permits
+            let acquired = critical_section::with(|cs| {
                 let mut state = self.state.borrow(cs).borrow_mut();
 
                 if state.permits > 0 { // some permits left
                     state.permits -= 1;
-                    permitted = true;
-
+                    true
                 } else { // NO PERMITS
                     let curr_tid = scheduler::get_current_tid();
                     state.waiting.add(curr_tid);
                     scheduler::block_current_task();
+                    false
                 }
             });
 
-            if permitted {
+            if acquired {
                 return;
-            } else {
-                scheduler::yield_now();
             }
+
+            scheduler::yield_now();
         }
     }
 
-    pub fn signal(&self) {
-        let mut woken = false;
+    #[inline]
+    pub fn try_wait(&self) -> bool {
         critical_section::with(|cs| {
+            let mut state = self.state.borrow(cs).borrow_mut();
+
+            if state.permits > 0 {
+                state.permits -= 1;
+                true
+            } else {
+                false
+            }
+        })
+    }
+
+    pub fn signal(&self) {
+        // yield if we woke someone
+        let someone_waiting = critical_section::with(|cs| {
             let mut state = self.state.borrow(cs).borrow_mut();
 
             if state.permits < state.capacity {
@@ -69,12 +91,21 @@ impl Semaphore {
 
             if let Some(tid) = pop_highest_prio(&mut state.waiting) {
                 scheduler::wake_task(tid);
-                woken = true;
+                true
+            } else {
+                false
             }
         });
 
-        if woken {
+        if someone_waiting {
             scheduler::yield_now();
         }
+    }
+
+    #[inline]
+    pub fn available(&self) -> usize {
+        critical_section::with(|cs| {
+            self.state.borrow(cs).borrow().permits
+        })
     }
 }
