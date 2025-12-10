@@ -2,37 +2,35 @@
 #![no_main]
 
 use whyos_demo::{board, hal};
-use whyos::Mutex;
 
 use defmt::info;
 
-static WORKER_NUM: Mutex<u32> = Mutex::new(0);
-
 #[unsafe(no_mangle)]
 extern "C" fn manager_task() -> ! {
-    info!("manager: start");
+    let mut x = 1.5;
     loop {
-        info!("manager: What's up worker?");
-        whyos::spawn_with_priority(worker_task, 2).unwrap();
-        whyos::sleep(2000);
-        info!("manager: He was a good man, Rest in peace worker nr {}", *WORKER_NUM.lock());
-        *WORKER_NUM.lock() += 1;
+        x += 0.5;
+        info!("x is {}", x);
+        whyos::sleep(500);
     }
 }
 
 #[unsafe(no_mangle)]
 extern "C" fn worker_task() -> ! {
-    info!("worker: Hi! I'm worker nr {}. I am alive and well, thank you for asking", *WORKER_NUM.lock());
-    whyos::sleep(500);
-    info!("worker: I should leave anyway, see you soon");
-    whyos::exit();
+    loop {
+        let y = 1.6;
+        info!("y is {}", y);
+        whyos::sleep(500);
+    }
 }
 
 #[hal::entry]
 fn main() -> ! {
     let (mut syst, freq) = board::init();
 
-    whyos::spawn_with_priority(manager_task, 1).unwrap();
+    whyos::TaskBuilder::new(manager_task).priority(2).stack_size(2048).spawn().unwrap();
+    whyos::TaskBuilder::new(worker_task).priority(1).stack_size(2048).spawn().unwrap();
+
 
     defmt::info!("Starting WhyOS");
     unsafe { whyos::start(&mut syst, freq / 1000); }

@@ -93,9 +93,10 @@ pub fn yield_cpu() {
     scheduler::yield_now();
 }
 
-pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! {
+pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! { // todo: disable interrupts here?
     scheduler::init_idle_task();
     scheduler::config_systick(syst, freq);
+
     unsafe {
         core::arch::asm!("svc 0", options(noreturn));
     }

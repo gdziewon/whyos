@@ -1,8 +1,8 @@
-use core::{mem, ptr};
+use core::{mem::{self, MaybeUninit}, ptr};
 
 use crate::WhyError;
 
-pub const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
+const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
 const XPSR_THUMB: u32 = 0x01000000;
 
 pub type TaskEntryPoint = extern "C" fn() -> !;
@@ -226,7 +226,7 @@ struct InitStackFrame { // goes at the end of stack memory
 impl InitStackFrame {
     pub fn new(entry_point: TaskEntryPoint) -> Self {
         Self {
-            sw_frame: SwStackFrame::default(),
+            sw_frame: SwStackFrame::new(),
             hw_frame: HwStackFrame::new(entry_point)
         }
     }
@@ -246,7 +246,7 @@ struct HwStackFrame { // popped automatically on interrupt return
 }
 
 impl HwStackFrame {
-    pub fn new(entry_point: TaskEntryPoint) -> Self {
+    fn new(entry_point: TaskEntryPoint) -> Self {
         Self {
             r0: 0, // todo: pass arg to task?
             r1: 0x11111111, // markers
@@ -261,5 +261,14 @@ impl HwStackFrame {
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
-struct SwStackFrame([u32; 8]); // R4-R11, popped manually in PendSV
+#[derive(Debug)]
+struct SwStackFrame{ // R4-R11 + LR, popped manually in PendSV
+    r4_11: MaybeUninit<[u32; 8]>,
+    lr: u32,
+}
+
+impl SwStackFrame {
+    fn new() -> Self {
+        Self { r4_11: MaybeUninit::uninit(), lr: EXC_RETURN_THREAD_PSP }
+    }
+}

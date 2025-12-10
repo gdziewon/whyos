@@ -15,7 +15,7 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "${workspaceFolder}/target/thumbv8m.main-none-eabihf/debug/whyos",
+                    "programBinary": "${workspaceFolder}/target/thumbv8m.main-none-eabihf/debug/whyos_app",
                     "rttEnabled": true,
                 }
             ],

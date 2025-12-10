@@ -1,6 +1,6 @@
 
 use crate::memory;
-use crate::task::{self, EXC_RETURN_THREAD_PSP, ResumeContext, TaskMap, TaskState, Tcb, TaskId};
+use crate::task::{self, ResumeContext, TaskMap, TaskState, Tcb, TaskId};
 use crate::error::{WhyResult, WhyError};
 
 use core::{arch::naked_asm, cell::RefCell};
@@ -208,21 +208,41 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
 
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
-pub unsafe extern "C" fn PendSV() { // todo: implement FPU!!!!
+pub unsafe extern "C" fn PendSV() {
     naked_asm!(
-        "mrs r0, psp",            // move psp to r0
-        "isb",                    // sync barrier
-        "stmdb r0!, {{r4-r11}}",  // push regs r4-r11 onto r0 (psp) and update it
-        "push {{lr}}",            // push LR (tells the cpu what it was doing before it was interrupted)
+        // load OLD sp to r0
+        "mrs r0, psp",
+        "isb",      // sync, mostly deffensive here
 
-        "bl switch_task",         // switch task - save old sp and get new one (into r0)
+        // check if OLD task is using FPU
+        // '!' updates r0
+        "tst lr, #0x10",             // test bit 4 (identifies FPU usage)
+        "it eq",                     // if FPU is enabled... (bit 4 == 0)
+        "vstmdbeq r0!, {{s16-s31}}", // save s16-s31, update r0 (OLD sp)
 
-        "pop {{r1}}",             // pop LR value
-        "mov lr, r1",             // move it to LR reg
-        "ldmia r0!, {{r4-r11}}",  // pop saved regs of new task, update r0
-        "msr psp, r0",            // set psp to r0
-        "isb",                    // sync barrier
-        "bx lr",                  // pop hw frame and run the task (thread mode, psp)
+        // push OLD tasks regs r4-r11 + lr, update r0 (OLD sp)
+        "stmdb r0!, {{r4-r11, lr}}",
+
+        // call to 'switch_task'
+        // input: r0 holds OLD task's stack ptr
+        // output: r0 will hold NEW task's stack ptr
+        "bl switch_task",
+
+        // restore regs from NEW task's stack (ptr in r0)
+        "ldmia r0!, {{r4-r11, lr}}",
+
+        // check if NEW task is using FPU
+        // we check the RESTORED LR value
+        "tst lr, #0x10",             // test bit 4 (identifies FPU usage)
+        "it eq",                     // if FPU is enabled... (bit 4 == 0)
+        "vldmiaeq r0!, {{s16-s31}}", // pop s16-s31, update r0 (NEW sp)
+
+        // update actual sp to NEW task's one
+        "msr psp, r0",
+        "isb",      // pipeline flush, ensures CPU uses new stack ptr
+
+        // exception return using NEW task's lr, so CPU knows wether to unstack FPU regs
+        "bx lr",
     );
 }
 
@@ -230,16 +250,19 @@ pub unsafe extern "C" fn PendSV() { // todo: implement FPU!!!!
 #[unsafe(naked)]
 pub unsafe extern "C" fn SVCall() {
     naked_asm!(
+        // call to 'get_idle_task_sp', returns sp in r0
         "bl get_idle_task_sp",
-        "ldmia r0!, {{r4-r11}}",// discard software frame (update r0 to point at hardware frame)
 
-        "msr psp, r0",          // set psp to r0 (hw frame)
+        // discard "fake" sw frame built during initialization
+        // and load default LR
+        "ldmia r0!, {{r4-r11, lr}}",
 
-        "mov r0, {EXC_VAL}",
-        "mov lr, r0",           // set lr to EXC_RETURN_THREAD_PSP
+        // set sp to r0 (hw frame)
+        "msr psp, r0",
+        "isb",      // flushes cpu pipeline, needed because we overwritten stack pointer
 
-        "bx lr",                // pop hw frame and run the task (thread mode, psp)
-        EXC_VAL = const EXC_RETURN_THREAD_PSP,
+        // return, default LR specifies thread mod and psp
+        "bx lr",
     );
 }
 
