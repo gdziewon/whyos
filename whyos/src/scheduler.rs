@@ -186,19 +186,13 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
             kernel.tasks[current].state = TaskState::Ready;
         }
 
-        // if ready task isn't found, fallback to idle task
-        let mut best_task = IDLE_TID;
-        let mut best_prio = u8::MAX;
-
         // start searching from (current + 1) for round robin
-        let start = (kernel.current_task + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
-        for tid in unsafe { kernel.ready.iter_from(start) } {
-            let prio = kernel.tasks[tid].priority;
-            if prio < best_prio {
-                best_prio = prio;
-                best_task = tid;
-            }
-        }
+        let next = (kernel.current_task + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
+
+        let best_task = kernel.ready
+            .iter_from(next)
+            .min_by_key(|&tid| kernel.tasks[tid].priority)
+            .unwrap_or(IDLE_TID); // fallback to IDLE
 
         kernel.current_task = best_task;
         kernel.tasks[best_task].state = TaskState::Running;

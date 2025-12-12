@@ -145,7 +145,7 @@ impl TaskMap {
     }
 
     #[inline]
-    pub unsafe  fn iter_from(&self, start_bit: usize) -> TaskMapCircularIter { // start bit needs to be less then 32!
+    pub fn iter_from(self, start_bit: usize) -> TaskMapCircularIter { // start bit needs to be less then 32!
         let mask_lower = (1u32 << start_bit).wrapping_sub(1);
 
         TaskMapCircularIter {
