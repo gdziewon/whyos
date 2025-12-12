@@ -622,6 +622,7 @@ dependencies = [
  "cortex-m-semihosting",
  "defmt 1.0.1",
  "defmt-rtt",
+ "embedded-hal 1.0.0",
  "rp235x-hal",
  "whyos",
 ]

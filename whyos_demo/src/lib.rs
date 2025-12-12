@@ -1,8 +1,9 @@
 #![no_std]
 
-pub mod board;
+mod board;
 pub mod rt;
 
+pub use board::Board;
 pub use rp235x_hal as hal;
 
 use defmt_rtt as _; // init rtt

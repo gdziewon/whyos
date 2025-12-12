@@ -1,36 +1,48 @@
 #![no_std]
 #![no_main]
 
-use whyos_demo::{board, hal};
+use embedded_hal::digital::StatefulOutputPin;
+use whyos_demo::{Board, hal};
 
 use defmt::info;
 
-#[unsafe(no_mangle)]
-extern "C" fn manager_task() -> ! {
-    let mr_big_array: [u32; 305] = [0xDEADBEEF; 305];
-    let mut x = 1.5;
-    loop {
-        x += 0.5;
-        info!("x is {}", x);
-        whyos::sleep(500);
-    }
-}
+type LedPin = hal::gpio::Pin<
+    hal::gpio::bank0::Gpio22,
+    hal::gpio::FunctionSio<hal::gpio::SioOutput>,
+    hal::gpio::PullDown
+>;
+
+static LED: whyos::Mutex<Option<LedPin>> = whyos::Mutex::new(None);
 
 #[unsafe(no_mangle)]
-extern "C" fn worker_task() -> ! {
+extern "C" fn blinky_task() -> ! {
     loop {
-        let y = 1.6;
-        info!("y is {}", y);
+        {
+            let mut led_opt = LED.lock();
+
+            if let Some(led) = led_opt.as_mut() {
+                led.toggle().unwrap();
+                info!("blink!");
+            }
+        }
+
         whyos::sleep(500);
     }
 }
 
 #[hal::entry]
 fn main() -> ! {
-    let (mut syst, freq) = board::init();
+    let board = Board::init();
+    let mut syst = board.syst;
+    let freq = board.sys_freq;
 
-    whyos::TaskBuilder::new(worker_task).priority(1).stack_size(2048).spawn().unwrap();
-    whyos::TaskBuilder::new(manager_task).priority(2).stack_size(2048).spawn().unwrap();
+    let led = board.pins.gpio22.into_push_pull_output();
+    {
+        let mut guard = LED.lock();
+        *guard = Some(led);
+    }
+
+    whyos::TaskBuilder::new(blinky_task).priority(2).stack_size(2048).spawn().unwrap();
 
 
     defmt::info!("Starting WhyOS");

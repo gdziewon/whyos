@@ -3,14 +3,14 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 use rp235x_hal::halt;
-use whyos_demo::{board, hal};
+use whyos_demo::{Board, hal};
 use cortex_m_semihosting::debug;
 
 static FLAG: AtomicBool = AtomicBool::new(false);
 
 #[unsafe(no_mangle)]
 extern "C" fn supervisor_task() -> ! {
-    whyos::add_task(low_prio, 2, 2048).unwrap();
+    whyos::spawn_with_priority(low_prio, 2).unwrap();
     whyos::sleep(100);
 
 
@@ -36,9 +36,11 @@ extern "C" fn low_prio() -> ! {
 #[hal::entry]
 
 fn main() -> ! {
-    let (mut syst, freq) = board::init();
+    let board = Board::init();
+    let mut syst = board.syst;
+    let freq = board.sys_freq;
 
-    whyos::add_task(supervisor_task, 1, 4096).unwrap();
+    whyos::TaskBuilder::new(supervisor_task).priority(1).stack_size(4096).spawn().unwrap();
 
     defmt::info!("Starting WhyOS");
     unsafe { whyos::start(&mut syst, freq / 1000); }
