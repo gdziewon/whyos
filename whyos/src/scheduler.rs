@@ -1,6 +1,6 @@
 
 use crate::memory;
-use crate::task::{self, ResumeContext, TaskMap, TaskState, Tcb, TaskId};
+use crate::task::{self, ResumeContext, TaskMap, TaskState, Tcb, TaskId, STACK_CANARY};
 use crate::error::{WhyResult, WhyError};
 
 use core::{arch::naked_asm, cell::RefCell};
@@ -178,16 +178,22 @@ extern "C" fn get_idle_task_sp() -> usize {
 extern "C" fn switch_task(old_sp: usize) -> usize {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-
-        // save old sp
         let current = kernel.current_task;
+
+        if kernel.tasks[current].state != TaskState::Dead {
+            let canary_val = unsafe { *(kernel.tasks[current].stack_base as *const u32)};
+            if canary_val != STACK_CANARY {
+                panic!("KERNEL PANIC: Stack Overflow detected in Task {}", current);
+            }
+        }
+
         kernel.tasks[current].sp = old_sp;
         if kernel.tasks[current].state == TaskState::Running {
             kernel.tasks[current].state = TaskState::Ready;
         }
 
         // start searching from (current + 1) for round robin
-        let next = (kernel.current_task + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
+        let next = (current + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
 
         let best_task = kernel.ready
             .iter_from(next)

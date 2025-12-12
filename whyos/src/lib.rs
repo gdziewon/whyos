@@ -7,53 +7,11 @@ mod memory;
 mod error;
 
 pub use itc::{Mutex, Queue, Semaphore};
-pub use task::TaskId;
+pub use task::{TaskId, TaskBuilder};
 
 use task::{TaskEntryPoint, TaskState, ResumeContext};
 use error::{WhyError, WhyResult};
 use scheduler::{KERNEL, IDLE_TID};
-
-pub struct TaskBuilder {
-    entry: TaskEntryPoint,
-    priority: u8,
-    stack_size: usize,
-    name: Option<&'static str>
-}
-
-impl TaskBuilder {
-    #[inline]
-    pub fn new(entry: TaskEntryPoint) -> Self {
-        Self {
-            entry,
-            priority: 128,
-            stack_size: 1024, // 1Kb
-            name: None,
-        }
-    }
-
-    #[inline]
-    pub fn priority(mut self, priority: u8) -> Self {
-        self.priority = priority;
-        self
-    }
-
-    #[inline]
-    pub fn stack_size(mut self, size: usize) -> Self {
-        self.stack_size = size;
-        self
-    }
-
-    #[inline]
-    pub fn name(mut self, name: &'static str) -> Self {
-        self.name = Some(name);
-        self
-    }
-
-    #[inline]
-    pub fn spawn(self) -> WhyResult<TaskId> {
-        scheduler::add_task(self.entry, self.name, self.priority, self.stack_size)
-    }
-}
 
 #[inline]
 pub fn spawn(entry: TaskEntryPoint) -> WhyResult<TaskId> {
