@@ -15,6 +15,7 @@ pub unsafe fn init_stack(
     let stack_top = unsafe { stack_start.add(size) };
 
     let init_frame = InitStackFrame::new(entry_point);
+
     let frame_ptr =
         (stack_top as usize - mem::size_of::<InitStackFrame>())
         as *mut InitStackFrame;

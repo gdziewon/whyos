@@ -3,12 +3,14 @@ mod stack;
 mod map;
 mod state;
 mod builder;
+mod info;
 
 pub use tcb::Tcb;
 pub use stack::{init_stack, TaskEntryPoint, STACK_CANARY};
 pub use map::TaskMap;
 pub use state::{TaskState, ResumeContext};
 pub use builder::TaskBuilder;
+pub use info::TaskInfo;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, defmt::Format)]
 #[repr(transparent)]

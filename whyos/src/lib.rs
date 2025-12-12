@@ -7,7 +7,7 @@ mod memory;
 mod error;
 
 pub use itc::{Mutex, Queue, Semaphore};
-pub use task::{TaskId, TaskBuilder};
+pub use task::{TaskId, TaskBuilder, TaskInfo};
 
 use task::{TaskEntryPoint, TaskState, ResumeContext};
 use error::{WhyError, WhyResult};
@@ -78,7 +78,9 @@ pub fn exit() -> ! {
 }
 
 pub fn suspend(tid: TaskId) -> WhyResult<()> {
-    if tid.0 == IDLE_TID {
+    let tid = tid.0;
+
+    if tid == IDLE_TID {
         return Err(WhyError::InvalidOperation);
     }
 
@@ -86,7 +88,6 @@ pub fn suspend(tid: TaskId) -> WhyResult<()> {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
 
         let current = kernel.current_task;
-        let tid = tid.0;
 
         if !kernel.allocated.is_set(tid) {
             return Err(WhyError::InvalidTaskId);
@@ -115,13 +116,14 @@ pub fn suspend(tid: TaskId) -> WhyResult<()> {
 }
 
 pub fn resume(tid: TaskId) -> WhyResult<()> {
-    if tid.0 == IDLE_TID {
+    let tid = tid.0;
+
+    if tid == IDLE_TID {
         return Err(WhyError::InvalidOperation);
     }
 
     let should_yield = critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        let tid = tid.0;
 
         if !kernel.allocated.is_set(tid) {
             return Err(WhyError::InvalidTaskId);
@@ -201,4 +203,35 @@ pub fn task_count() -> usize {
 #[inline]
 pub fn reclaim_memory() {
     scheduler::reap_zombies();
+}
+
+#[inline]
+pub fn task_info(tid: TaskId) -> WhyResult<TaskInfo> {
+    critical_section::with(|cs| {
+        let kernel = KERNEL.borrow(cs).borrow();
+        let tid = tid.0;
+
+        if !kernel.allocated.is_set(tid) {
+            return Err(WhyError::InvalidTaskId);
+        }
+
+        let task = &kernel.tasks[tid];
+
+        Ok(TaskInfo {
+            id: tid,
+            name: task.name,
+            state: task.state,
+            priority: task.priority,
+            stack_size: task.stack_size,
+        })
+    })
+}
+
+pub fn active_tasks() -> impl Iterator<Item = TaskId> {
+    let mask = critical_section::with(|cs| {
+        let kernel = KERNEL.borrow(cs).borrow();
+        kernel.allocated // copy it out
+    });
+
+    mask.iter().map(TaskId)
 }

@@ -2,7 +2,7 @@ use crate::error::WhyError;
 
 
 // inspired by https://freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/02-Task-states
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
 #[repr(u8)]
 pub enum TaskState {
     Ready,
@@ -14,7 +14,7 @@ pub enum TaskState {
     Dead
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum ResumeContext {
     Ready,
     Blocked,
