@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "whyos",
-    "whyos_demo"
+    "whyos_demo",
+    "whyos_shell"
 ]
 resolver = "2"

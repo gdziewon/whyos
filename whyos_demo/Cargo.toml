@@ -3,8 +3,17 @@ name = "whyos_demo"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["shell"]
+shell = [
+    "dep:whyos_shell",
+    "dep:embedded-io",
+    "dep:embedded-hal-nb",
+    "dep:nb"
+]
+
 [dependencies]
-whyos= { path = "../whyos" }
+whyos = { path = "../whyos" }
 
 cortex-m = "0.7.6"
 cortex-m-rt = "0.7.5"
@@ -14,10 +23,17 @@ rp235x-hal = { version = "0.3.0", features = [
   "binary-info", # include a static variable containing binary info
   "critical-section-impl", # critical section that is safe for multicore use
   "defmt", # implements defmt::Format for several types
+  "rt"
 ] }
 
 defmt = "1.0.1"
 defmt-rtt = "1.1.0"
+
+# Shell
+whyos_shell = { path = "../whyos_shell", optional = true}
+embedded-io = {version = "0.6.1", optional = true}
+embedded-hal-nb = { version = "1.0.0", optional = true}
+nb = { version = "1.1.0", optional = true}
 
 [dev-dependencies]
 cortex-m-semihosting = "0.5.0"

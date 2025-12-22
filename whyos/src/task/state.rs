@@ -1,8 +1,10 @@
+use core::fmt;
+
 use crate::error::WhyError;
 
 
 // inspired by https://freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/02-Task-states
-#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 #[repr(u8)]
 pub enum TaskState {
     Ready,
@@ -14,7 +16,22 @@ pub enum TaskState {
     Dead
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+impl fmt::Display for TaskState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use TaskState as Ts;
+        match *self {
+            Ts::Ready => f.pad("Ready"),
+            Ts::Running => f.pad("Running"),
+            Ts::Blocked => f.pad("Blocked"),
+            Ts::Sleeping => f.pad("Sleeping"),
+            Ts::Suspended(_) => f.pad("Suspended"),
+            Ts::Zombie => f.pad("Zombie"),
+            Ts::Dead => f.pad("Dead"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum ResumeContext {
     Ready,
     Blocked,
@@ -24,10 +41,12 @@ pub enum ResumeContext {
 impl From<ResumeContext> for TaskState {
     #[inline]
     fn from(value: ResumeContext) -> Self {
+        use TaskState as Ts;
+        use ResumeContext as Rctx;
         match value {
-            ResumeContext::Ready => TaskState::Ready,
-            ResumeContext::Blocked => TaskState::Blocked,
-            ResumeContext::Sleeping => TaskState::Sleeping,
+            Rctx::Ready => Ts::Ready,
+            Rctx::Blocked => Ts::Blocked,
+            Rctx::Sleeping => Ts::Sleeping,
         }
     }
 }
@@ -37,12 +56,12 @@ impl TryFrom<TaskState> for ResumeContext {
 
     #[inline]
     fn try_from(value: TaskState) -> Result<Self, Self::Error> {
-        use TaskState as TS;
-        use ResumeContext as RCTX;
+        use TaskState as Ts;
+        use ResumeContext as Rctx;
         match value {
-            TS::Ready | TaskState::Running => Ok(RCTX::Ready),
-            TS::Blocked => Ok(RCTX::Blocked),
-            TS::Sleeping => Ok(RCTX::Sleeping),
+            Ts::Ready | TaskState::Running => Ok(Rctx::Ready),
+            Ts::Blocked => Ok(Rctx::Blocked),
+            Ts::Sleeping => Ok(Rctx::Sleeping),
             _ => Err(WhyError::InvalidOperation)
         }
     }

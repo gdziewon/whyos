@@ -1,13 +1,29 @@
-use rp235x_hal::{self as hal, Clock as _};
+use rp235x_hal::{
+    self as hal, Clock as _, fugit::RateExtU32 as _,
+    gpio::{
+        bank0::{Gpio0, Gpio1},
+        FunctionUart, Pin, PullDown
+    },
+    pac::{UART0, RESETS},
+    uart::{DataBits, StopBits, UartConfig, UartPeripheral, Reader, Writer}
+};
 use cortex_m::peripheral::SYST;
 
-const XTAL_FREQ_HZ: u32 = 12_000_000u32; // 12 MHz
+const XTAL_FREQ_HZ: u32 = 12_000_000u32;
+
+pub type UartRx = Reader<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
+pub type UartTx = Writer<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
 
 pub struct Board {
     pub syst: SYST,
     pub sys_freq: u32,
-    pub pins: hal::gpio::Pins,
-    pub resets: hal::pac::RESETS,
+    pub resets: RESETS,
+    pub uart: Uart,
+}
+
+pub struct Uart {
+    pub rx: UartRx,
+    pub tx: UartTx
 }
 
 impl Board {
@@ -30,6 +46,7 @@ impl Board {
         let sys_freq = clocks.system_clock.freq().to_Hz();
 
         let sio = hal::Sio::new(pac.SIO);
+
         let pins = hal::gpio::Pins::new(
             pac.IO_BANK0,
             pac.PADS_BANK0,
@@ -37,11 +54,27 @@ impl Board {
             &mut pac.RESETS,
         );
 
+        let uart_pins = (
+            pins.gpio0.into_function::<FunctionUart>(),
+            pins.gpio1.into_function::<FunctionUart>(),
+        );
+
+        let mut uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
+            .enable(
+                UartConfig::new(115200.Hz(), DataBits::Eight, None, StopBits::One),
+                sys_freq.Hz(),
+            )
+            .unwrap();
+
+        uart.enable_rx_interrupt();
+
+        let (rx, tx) = uart.split();
+
         Self {
             syst: core.SYST,
             sys_freq,
-            pins,
             resets: pac.RESETS,
+            uart: Uart { rx, tx }
         }
     }
 }

@@ -1,9 +1,11 @@
 #![no_std]
 
-mod board;
+pub mod board;
 pub mod rt;
 
-pub use board::Board;
+#[cfg(feature = "shell")]
+pub mod shell;
+
 pub use rp235x_hal as hal;
 
 use defmt_rtt as _; // init rtt
