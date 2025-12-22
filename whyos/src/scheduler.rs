@@ -210,6 +210,9 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
 #[unsafe(naked)]
 pub unsafe extern "C" fn PendSV() {
     naked_asm!(
+        // tells the assembler that we are using fpu
+        ".fpu fpv5-sp-d16",
+
         // load OLD sp to r0
         "mrs r0, psp",
         "isb",      // sync, mostly deffensive here
