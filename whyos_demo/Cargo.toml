@@ -53,3 +53,7 @@ test = false
 [[test]]
 name = "test_scheduler"
 harness = false
+
+[[test]]
+name = "test_args"
+harness = false

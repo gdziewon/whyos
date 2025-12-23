@@ -15,3 +15,11 @@ use core::sync::atomic::{self, Ordering};
 pub fn halt() -> ! {
     loop { atomic::compiler_fence(Ordering::SeqCst); }
 }
+
+pub fn assert_print(cond: bool) {
+    if cond {
+        defmt::info!("OK");
+    } else {
+        defmt::error!("FAILED");
+    }
+}

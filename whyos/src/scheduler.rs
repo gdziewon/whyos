@@ -34,7 +34,7 @@ pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelS
     zombies: TaskMap::new()
 }));
 
-pub fn add_task(entry: task::TaskEntryPoint, name: Option<&'static str>, priority: u8, stack_size: usize) -> WhyResult<TaskId> {
+pub fn add_task(entry: task::TaskEntryPoint, arg: usize, name: Option<&'static str>, priority: u8, stack_size: usize) -> WhyResult<TaskId> {
     let stack = match memory::alloc(stack_size) {
         Some(mem) => mem,
         None => {
@@ -43,7 +43,7 @@ pub fn add_task(entry: task::TaskEntryPoint, name: Option<&'static str>, priorit
         }
     };
 
-    let sp = unsafe { task::init_stack(stack.ptr, stack.size, entry)};
+    let sp = unsafe { task::init_stack(stack.ptr, stack.size, entry, arg)};
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
@@ -89,7 +89,7 @@ pub fn reap_zombies() -> bool {
 }
 
 pub fn init_idle_task() { // idle task is ran when every other task can't
-    extern "C" fn idle_task() -> ! {
+    extern "C" fn idle_task(_: usize) -> ! {
         loop {
             reap_zombies();
             cortex_m::asm::wfi();
@@ -101,7 +101,7 @@ pub fn init_idle_task() { // idle task is ran when every other task can't
         None => panic!("WhyOS: Out of Memory")
     };
 
-    let sp = unsafe { task::init_stack(stack.ptr, stack.size, idle_task)};
+    let sp = unsafe { task::init_stack(stack.ptr, stack.size, idle_task, 0)};
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();

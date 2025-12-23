@@ -1,20 +1,21 @@
-use core::{ptr, mem::{self, MaybeUninit}};
+use core::{mem::{self, MaybeUninit}, ptr};
 
 const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
 const XPSR_THUMB: u32 = 0x01000000;
 
 pub const STACK_CANARY: u32 = 0xDEADC0DE; // todo: maybe something more random?
 
-pub type TaskEntryPoint = extern "C" fn() -> !;
+pub type TaskEntryPoint = extern "C" fn(usize) -> !;
 
 pub unsafe fn init_stack(
     stack_start: *mut u8,
     size: usize,
-    entry_point: TaskEntryPoint
+    entry_point: TaskEntryPoint,
+    arg: usize
 ) -> usize {
     let stack_top = unsafe { stack_start.add(size) };
 
-    let init_frame = InitStackFrame::new(entry_point);
+    let init_frame = InitStackFrame::new(entry_point, arg);
 
     let frame_ptr =
         (stack_top as usize - mem::size_of::<InitStackFrame>())
@@ -35,10 +36,10 @@ struct InitStackFrame { // goes at the end of stack memory
 }
 
 impl InitStackFrame {
-    pub fn new(entry_point: TaskEntryPoint) -> Self {
+    pub fn new(entry_point: TaskEntryPoint, arg: usize) -> Self {
         Self {
             sw_frame: SwStackFrame::new(),
-            hw_frame: HwStackFrame::new(entry_point)
+            hw_frame: HwStackFrame::new(entry_point, arg)
         }
     }
 }
@@ -57,9 +58,9 @@ struct HwStackFrame { // popped automatically on interrupt return
 }
 
 impl HwStackFrame {
-    fn new(entry_point: TaskEntryPoint) -> Self {
+    fn new(entry_point: TaskEntryPoint, arg: usize) -> Self {
         Self {
-            r0: 0, // todo: pass arg to task?
+            r0: arg as u32,
             r1: 0x11111111, // markers
             r2: 0x22222222,
             r3: 0x33333333,

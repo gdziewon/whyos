@@ -9,17 +9,17 @@ mod error;
 pub use itc::{Mutex, Queue, Semaphore};
 pub use task::{TaskId, TaskBuilder, TaskInfo};
 
-use task::{TaskEntryPoint, TaskState, ResumeContext};
+use task::{TaskRoutine, TaskState, ResumeContext};
 use error::{WhyError, WhyResult};
 use scheduler::{KERNEL, IDLE_TID};
 
 #[inline]
-pub fn spawn(entry: TaskEntryPoint) -> WhyResult<TaskId> {
+pub fn spawn(entry: TaskRoutine) -> WhyResult<TaskId> {
     TaskBuilder::new(entry).spawn()
 }
 
 #[inline]
-pub fn spawn_with_priority(entry: TaskEntryPoint, priority: u8) -> WhyResult<TaskId> {
+pub fn spawn_with_priority(entry: TaskRoutine, priority: u8) -> WhyResult<TaskId> {
     TaskBuilder::new(entry).priority(priority).spawn()
 }
 
