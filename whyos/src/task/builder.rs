@@ -1,9 +1,7 @@
 use core::mem;
 
-use super::TaskId;
-use super::stack;
+use super::{TaskId, stack, ops};
 use crate::error::WhyResult;
-use crate::scheduler;
 
 pub type TaskRoutine = extern "C" fn();
 pub type TaskRoutineArg<T> = extern "C" fn(T);
@@ -147,7 +145,7 @@ impl TaskBuilder {
 
     #[inline]
     pub fn spawn(self) -> WhyResult<TaskId> {
-        scheduler::add_task(self.entry, self.arg, self.name, self.priority, self.stack_size)
+        ops::spawn(self.entry, self.arg, self.name, self.priority, self.stack_size)
     }
 }
 

@@ -1,16 +1,17 @@
-mod tcb;
-mod stack;
-mod map;
-mod state;
 mod builder;
 mod info;
+mod map;
+pub mod ops;
+mod stack;
+mod state;
+mod tcb;
 
-pub use tcb::Tcb;
-pub use stack::{init_stack, TaskEntryPoint, STACK_CANARY};
-pub use map::TaskMap;
-pub use state::{TaskState, ResumeContext};
 pub use builder::{TaskBuilder, TaskRoutine, StackSize};
 pub use info::TaskInfo;
+pub use map::TaskMap;
+pub use stack::{init_stack, TaskEntryPoint, STACK_CANARY};
+pub use state::{TaskState, ResumeContext};
+pub use tcb::Tcb;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, defmt::Format)]
 #[repr(transparent)]
