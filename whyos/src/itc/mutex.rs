@@ -72,6 +72,8 @@ impl<T> Mutex<T> {
                 if !state.locked { // success
                     state.locked = true;
                     state.owner = Some(curr_tid);
+
+                    state.waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
                     true
 
                 } else { // we have to wait

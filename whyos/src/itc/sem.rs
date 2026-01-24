@@ -47,11 +47,12 @@ impl Semaphore {
             let acquired = critical_section::with(|cs| {
                 let mut state = self.state.borrow(cs).borrow_mut();
 
+                let curr_tid = scheduler::get_current_tid();
                 if state.permits > 0 { // some permits left
                     state.permits -= 1;
+                    state.waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
                     true
                 } else { // NO PERMITS
-                    let curr_tid = scheduler::get_current_tid();
                     state.waiting.add(curr_tid);
                     scheduler::block_current_task();
                     false

@@ -17,6 +17,10 @@ fn pop_highest_prio(list: &mut TaskMap) -> Option<usize> {
     let mut best_prio = u8::MAX;
 
     for tid in list.iter() {
+        if scheduler::is_task_suspended(tid) {
+            continue;
+        }
+
         let prio = scheduler::get_task_priority(tid);
         if prio < best_prio {
             best_prio = prio;

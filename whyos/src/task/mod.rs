@@ -9,7 +9,7 @@ pub use tcb::Tcb;
 pub use stack::{init_stack, TaskEntryPoint, STACK_CANARY};
 pub use map::TaskMap;
 pub use state::{TaskState, ResumeContext};
-pub use builder::{TaskBuilder, TaskRoutine};
+pub use builder::{TaskBuilder, TaskRoutine, StackSize};
 pub use info::TaskInfo;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, defmt::Format)]

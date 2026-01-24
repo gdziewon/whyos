@@ -161,6 +161,13 @@ pub fn get_current_tid() -> usize {
     })
 }
 
+pub fn is_task_suspended(tid: usize) -> bool {
+    critical_section::with(|cs| {
+        let kernel = KERNEL.borrow(cs).borrow();
+        matches!(kernel.tasks[tid].state, TaskState::Suspended(_))
+    })
+}
+
 #[inline]
 pub fn yield_now() {
     cortex_m::peripheral::SCB::set_pendsv();

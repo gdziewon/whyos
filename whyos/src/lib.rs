@@ -7,9 +7,9 @@ mod memory;
 mod error;
 
 pub use itc::{Mutex, Queue, Semaphore};
-pub use task::{TaskId, TaskBuilder, TaskInfo};
+pub use task::{TaskId, TaskBuilder, TaskInfo, StackSize};
+pub use task::{TaskRoutine, TaskState, ResumeContext};
 
-use task::{TaskRoutine, TaskState, ResumeContext};
 use error::{WhyError, WhyResult};
 use scheduler::{KERNEL, IDLE_TID};
 
@@ -136,10 +136,11 @@ pub fn resume(tid: TaskId) -> WhyResult<()> {
             return Ok(false);
         };
 
-        task.state = ctx.into(); // ResumeContext::Ready -> TaskState::Ready etc.
+        //task.state = ctx.into(); // ResumeContext::Ready -> TaskState::Ready etc.
 
         match ctx {
             ResumeContext::Ready => {
+                task.state = TaskState::Ready;
                 kernel.ready.add(tid);
                 Ok(true)
             },
@@ -150,13 +151,16 @@ pub fn resume(tid: TaskId) -> WhyResult<()> {
                     kernel.ready.add(tid);
                     Ok(true)
                 } else {
+                    task.state = TaskState::Sleeping;
                     kernel.sleeping.add(tid);
                     Ok(false) // didn't wake up yet
                 }
             },
 
             ResumeContext::Blocked => {
-                Ok(false) // mutex will handle it
+                task.state = TaskState::Ready;
+                kernel.ready.add(tid);
+                Ok(true) // mutex will handle it
             },
         }
     })?;

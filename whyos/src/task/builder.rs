@@ -23,7 +23,7 @@ impl TaskBuilder {
             entry,
             arg,
             priority: 128,
-            stack_size: 1024,
+            stack_size: StackSize::SMALL.0,
             name: None,
         }
     }
@@ -134,8 +134,8 @@ impl TaskBuilder {
     }
 
     #[inline]
-    pub fn stack_size(mut self, size: usize) -> Self {
-        self.stack_size = size;
+    pub fn stack_size(mut self, size: StackSize) -> Self {
+        self.stack_size = size.0;
         self
     }
 
@@ -148,5 +148,35 @@ impl TaskBuilder {
     #[inline]
     pub fn spawn(self) -> WhyResult<TaskId> {
         scheduler::add_task(self.entry, self.arg, self.name, self.priority, self.stack_size)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StackSize(usize);
+
+impl StackSize {
+    pub const SMALL: Self = Self(1024); // 1kb
+
+    pub const DEFAULT: Self = Self(2048); // 2kb
+
+    pub const MEDIUM: Self = Self(4096); // 4kb
+
+    pub const LARGE: Self = Self(8192); // 8kb
+
+    #[inline]
+    pub const fn bytes(bytes: usize) -> Self {
+        Self(bytes)
+    }
+
+    #[inline]
+    pub const fn kb(kb: usize) -> Self {
+        Self(kb * 1024)
+    }
+}
+
+impl Default for StackSize {
+    #[inline]
+    fn default() -> Self {
+        Self::DEFAULT
     }
 }

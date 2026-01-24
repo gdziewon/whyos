@@ -46,9 +46,9 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             let should_yield = critical_section::with(|cs| {
                 let mut state = self.state.borrow(cs).borrow_mut();
 
+                let curr_tid = scheduler::get_current_tid();
                 if state.count == CAPACITY { // queue is full, cant send
                     scheduler::block_current_task();
-                    let curr_tid = scheduler::get_current_tid();
                     state.prod_waiting.add(curr_tid);
                     true
 
@@ -65,6 +65,8 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
 
                     state.write_idx = (state.write_idx + 1) % CAPACITY;
                     state.count += 1;
+
+                    state.prod_waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
 
                     if let Some(tid) = pop_highest_prio(&mut state.cons_waiting) {
                         scheduler::wake_task(tid);
@@ -122,9 +124,9 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             let should_yield = critical_section::with(|cs| {
                 let mut state = self.state.borrow(cs).borrow_mut();
 
+                let curr_tid = scheduler::get_current_tid();
                 if state.count == 0 { // no data to receive = block
                     scheduler::block_current_task();
-                    let curr_tid = scheduler::get_current_tid();
                     state.cons_waiting.add(curr_tid);
                     false
 
@@ -137,9 +139,10 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                         Some(val)
                     };
 
-
                     state.read_idx = (state.read_idx + 1) % CAPACITY;
                     state.count -= 1;
+
+                    state.cons_waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
 
                     if let Some(tid) = pop_highest_prio(&mut state.prod_waiting) {
                         scheduler::wake_task(tid);
