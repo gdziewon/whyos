@@ -5,17 +5,18 @@ const XPSR_THUMB: u32 = 0x01000000;
 
 pub const STACK_CANARY: u32 = 0xDEADC0DE; // todo: maybe something more random?
 
-pub type TaskEntryPoint = extern "C" fn(usize) -> !;
+pub type TaskEntryPoint = extern "C" fn(usize);
 
 pub unsafe fn init_stack(
     stack_start: *mut u8,
     size: usize,
     entry_point: TaskEntryPoint,
-    arg: usize
+    arg: usize,
+    return_handler: usize
 ) -> usize {
     let stack_top = unsafe { stack_start.add(size) };
 
-    let init_frame = InitStackFrame::new(entry_point, arg);
+    let init_frame = InitStackFrame::new(entry_point as usize, arg, return_handler);
 
     let frame_ptr =
         (stack_top as usize - mem::size_of::<InitStackFrame>())
@@ -36,10 +37,10 @@ struct InitStackFrame { // goes at the end of stack memory
 }
 
 impl InitStackFrame {
-    pub fn new(entry_point: TaskEntryPoint, arg: usize) -> Self {
+    pub fn new(entry_point: usize, arg: usize, return_handler: usize) -> Self {
         Self {
             sw_frame: SwStackFrame::new(),
-            hw_frame: HwStackFrame::new(entry_point, arg)
+            hw_frame: HwStackFrame::new(entry_point, arg, return_handler)
         }
     }
 }
@@ -58,14 +59,14 @@ struct HwStackFrame { // popped automatically on interrupt return
 }
 
 impl HwStackFrame {
-    fn new(entry_point: TaskEntryPoint, arg: usize) -> Self {
+    fn new(entry_point: usize, arg: usize, return_handler: usize) -> Self {
         Self {
             r0: arg as u32,
             r1: 0x11111111, // markers
             r2: 0x22222222,
             r3: 0x33333333,
             r12: 0xCCCCCCCC,
-            lr: EXC_RETURN_THREAD_PSP, // on exception return, use psp in thread mode
+            lr: return_handler as u32, // on exception return, use psp in thread mode
             pc: entry_point as usize as u32,
             xpsr: XPSR_THUMB, // thumb bit, must be set for cortex-m
         }

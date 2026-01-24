@@ -22,7 +22,7 @@ pub fn halt() -> ! {
 macro_rules! check {
     ($cond:expr) => {
         if !($cond) {
-            return Err(concat!("Assertion failed: ", stringify!($cond)));
+            return Err(concat!("Assertion failed: ", stringify!($cond), " | ", file!(), ":", line!()));
         }
     };
     ($cond:expr, $msg:expr) => {
@@ -41,8 +41,7 @@ macro_rules! harness {
         static TEST_STATUS: whyos::Mutex<bool> = whyos::Mutex::new(true); // holds status of currently finished testcase
 
         // runs test function and signals completion to runner
-        #[unsafe(no_mangle)]
-        extern "C" fn test_wrapper(fn_addr: usize) -> ! {
+        extern "C" fn test_wrapper(fn_addr: usize) {
             // transmute ptr to fn() -> TaskResult
             let test_fn: fn() -> $crate::TestResult = unsafe { core::mem::transmute(fn_addr) };
 
@@ -58,12 +57,9 @@ macro_rules! harness {
             }
 
             TEST_DONE.signal(); // signal the runner
-
-            whyos::exit();
         }
 
-        #[unsafe(no_mangle)]
-        extern "C" fn runner() -> ! {
+        extern "C" fn runner() {
             defmt::info!("TEST SUITE: {}\n", file!());
 
             let mut any_failed = false;

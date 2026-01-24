@@ -49,7 +49,7 @@ fn UART0_IRQ() {
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn shell_task() -> ! {
+extern "C" fn shell_task() {
     let tx: UartTx;
     {
         let mut tx_guard = UART_TX.lock();

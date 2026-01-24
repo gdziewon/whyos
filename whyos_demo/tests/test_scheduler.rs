@@ -37,9 +37,8 @@ fn test_saturation() -> TestResult {
     Ok(())
 }
 
-extern "C" fn tiny_task() -> ! {
+extern "C" fn tiny_task() {
     ACTIVE_COUNT.fetch_add(1, Ordering::Relaxed);
-    whyos::exit();
 }
 
 // Tests strict preemption, low prio task should never run in this case
@@ -62,17 +61,15 @@ fn test_starvation() -> TestResult {
     Ok(())
 }
 
-extern "C" fn worker_low() -> ! {
+extern "C" fn worker_low() {
     COUNTER_A.fetch_add(1, Ordering::Relaxed);
-    whyos::exit();
 }
 
-extern "C" fn worker_high_hog() -> ! {
+extern "C" fn worker_high_hog() {
     while !STOP_FLAG.load(Ordering::Relaxed) {
         COUNTER_B.fetch_add(1, Ordering::Relaxed);
         for _ in 0..1000 { cortex_m::asm::nop(); }
     }
-    whyos::exit();
 }
 
 // Test fairness for same prio tasks
@@ -103,7 +100,7 @@ fn test_fairness() -> TestResult {
     Ok(())
 }
 
-extern "C" fn rr_worker(flag: &'static AtomicU32) -> ! { loop { flag.fetch_add(1, Ordering::Relaxed); whyos::yield_cpu(); } }
+extern "C" fn rr_worker(flag: &'static AtomicU32) { loop { flag.fetch_add(1, Ordering::Relaxed); whyos::yield_cpu(); } }
 
 
 harness! {

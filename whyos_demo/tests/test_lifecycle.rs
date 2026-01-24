@@ -40,12 +40,11 @@ fn test_suspend_resume() -> TestResult {
     Ok(())
 }
 
-extern "C" fn worker_count() -> ! {
+extern "C" fn worker_count() {
     while !STOP_FLAG.load(Ordering::Relaxed) {
         COUNTER.fetch_add(1, Ordering::Relaxed);
         whyos::sleep(10);
     }
-    whyos::exit();
 }
 
 // Test memory reclamation
@@ -59,7 +58,7 @@ fn test_reincarnation() -> TestResult {
     Ok(())
 }
 
-extern "C" fn worker_die() -> ! {
+extern "C" fn worker_die() {
     whyos::exit();
 }
 
@@ -93,31 +92,21 @@ fn test_suspend_mutex_inversion() -> TestResult {
     Ok(())
 }
 
-extern "C" fn mutex_holder() -> ! {
-    {
-        let _g = TEST_MUTEX.lock();
-        whyos::sleep(50);
-    }
-    whyos::exit();
+extern "C" fn mutex_holder() {
+    let _g = TEST_MUTEX.lock();
+    whyos::sleep(50);
 }
 
-extern "C" fn mutex_waiter_high() -> ! {
-    {
-        let _g = TEST_MUTEX.lock();
-    }
-    whyos::exit();
+extern "C" fn mutex_waiter_high() {
+    let _g = TEST_MUTEX.lock();
 }
 
-extern "C" fn mutex_waiter_low(high_tid: whyos::TaskId) -> ! {
-    {
-        let _g = TEST_MUTEX.lock();
-    }
+extern "C" fn mutex_waiter_low(high_tid: whyos::TaskId) {
+    let _g = TEST_MUTEX.lock();
 
     LOW_RAN.store(1, Ordering::Relaxed);
 
     whyos::resume(high_tid).unwrap();
-
-    whyos::exit();
 }
 
 harness! {

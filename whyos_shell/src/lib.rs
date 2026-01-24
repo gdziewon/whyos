@@ -25,7 +25,7 @@ where
         }
     }
 
-    pub fn run(&mut self) -> ! {
+    pub fn run(&mut self) {
         self.print_fmt(format_args!("\r\n{}", PROMPT));
         loop {
             let byte = self.input.receive(); // read byte

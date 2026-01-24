@@ -27,36 +27,24 @@ fn test_mutex_priority() -> TestResult {
     Ok(())
 }
 
-extern "C" fn holder() -> ! {
-    {
-        let _g = MUTEX_PRIO.lock();
-        whyos::sleep(50);
-    }
-    whyos::exit();
+extern "C" fn holder() {
+    let _g = MUTEX_PRIO.lock();
+    whyos::sleep(50);
 }
 
-extern "C" fn waiter_high() -> ! {
-    {
-        let mut g = MUTEX_PRIO.lock();
-        *g = *g * 10 + 1;
-    }
-    whyos::exit();
+extern "C" fn waiter_high() {
+    let mut g = MUTEX_PRIO.lock();
+    *g = *g * 10 + 1;
 }
 
-extern "C" fn waiter_med() -> ! {
-    {
-        let mut g = MUTEX_PRIO.lock();
-        *g = *g * 10 + 2;
-    }
-    whyos::exit();
+extern "C" fn waiter_med() {
+    let mut g = MUTEX_PRIO.lock();
+    *g = *g * 10 + 2;
 }
 
-extern "C" fn waiter_low() -> ! {
-    {
-        let mut g = MUTEX_PRIO.lock();
-        *g = *g * 10 + 3;
-    }
-    whyos::exit();
+extern "C" fn waiter_low() {
+    let mut g = MUTEX_PRIO.lock();
+    *g = *g * 10 + 3;
 }
 
 
@@ -78,13 +66,11 @@ fn test_semaphore_blocking() -> TestResult {
     Ok(())
 }
 
-extern "C" fn consumer() -> ! {
+extern "C" fn consumer() {
     SEM_COUNT.wait();
     SEM_COUNT.wait();
 
     CONS_FINISHED.store(true, Ordering::Relaxed);
-
-    whyos::exit();
 }
 
 static QUEUE_SMALL: Queue<u8, 2> = Queue::new();
@@ -143,12 +129,11 @@ fn test_mutex_stress() -> TestResult {
     Ok(())
 }
 
-extern "C" fn t5_worker() -> ! {
+extern "C" fn t5_worker() {
     for _ in 0..100 {
         let mut g = MUTEX_STRESS.lock();
         *g += 1;
     }
-    whyos::exit();
 }
 
 

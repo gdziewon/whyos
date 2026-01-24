@@ -5,8 +5,8 @@ use super::stack;
 use crate::error::WhyResult;
 use crate::scheduler;
 
-pub type TaskRoutine = extern "C" fn() -> !;
-pub type TaskRoutineArg<T> = extern "C" fn(T) -> !;
+pub type TaskRoutine = extern "C" fn();
+pub type TaskRoutineArg<T> = extern "C" fn(T);
 
 pub struct TaskBuilder {
     entry: stack::TaskEntryPoint,

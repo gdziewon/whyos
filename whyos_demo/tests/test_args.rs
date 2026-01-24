@@ -15,9 +15,8 @@ fn test_value() -> TestResult {
     Ok(())
 }
 
-extern "C" fn takes_value(a: u32) -> ! {
+extern "C" fn takes_value(a: u32) {
     *(TASK_ARG.lock()) = a;
-    whyos::exit();
 }
 
 fn test_ptr_mut() -> TestResult {
@@ -31,9 +30,8 @@ fn test_ptr_mut() -> TestResult {
     Ok(())
 }
 
-extern "C" fn takes_ptr_mut(a: *mut u32) -> ! {
+extern "C" fn takes_ptr_mut(a: *mut u32) {
     *(TASK_ARG.lock()) = unsafe { *a };
-    whyos::exit();
 }
 
 fn test_static_mut() -> TestResult {
@@ -46,9 +44,8 @@ fn test_static_mut() -> TestResult {
     Ok(())
 }
 
-extern "C" fn takes_static_mut(a: &'static mut [u32; 3]) -> ! {
+extern "C" fn takes_static_mut(a: &'static mut [u32; 3]) {
     *(TASK_ARG.lock()) = a[1];
-    whyos::exit();
 }
 
 harness!{

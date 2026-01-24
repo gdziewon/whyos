@@ -61,20 +61,7 @@ pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! { // 
 }
 
 pub fn exit() -> ! {
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        let current = kernel.current_task;
-
-        kernel.ready.remove(current);
-        kernel.sleeping.remove(current); // just in case, it should be impossible
-
-        kernel.zombies.add(current);
-        kernel.tasks[current].state = TaskState::Zombie;
-    });
-
-    scheduler::yield_now();
-
-    loop { cortex_m::asm::wfi(); }
+    scheduler::task_exit()
 }
 
 pub fn suspend(tid: TaskId) -> WhyResult<()> {
