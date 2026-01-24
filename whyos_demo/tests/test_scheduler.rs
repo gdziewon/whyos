@@ -1,45 +1,113 @@
 #![no_std]
 #![no_main]
 
-use core::sync::atomic::{AtomicBool, Ordering};
-use rp235x_hal::halt;
-use whyos_demo::{board::Board, hal};
-use cortex_m_semihosting::debug;
+use whyos_demo::{check, harness, TestResult};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-static FLAG: AtomicBool = AtomicBool::new(false);
+static COUNTER_A: AtomicU32 = AtomicU32::new(0);
+static COUNTER_B: AtomicU32 = AtomicU32::new(0);
+static COUNTER_C: AtomicU32 = AtomicU32::new(0);
+static COUNTER_D: AtomicU32 = AtomicU32::new(0);
 
-#[unsafe(no_mangle)]
-extern "C" fn supervisor_task() -> ! {
-    defmt::info!("Priority test:");
-    whyos::spawn_with_priority(low_prio, 2).unwrap();
-    whyos::sleep(100);
+static ACTIVE_COUNT: AtomicU32 = AtomicU32::new(0);
 
+static STOP_FLAG: AtomicBool = AtomicBool::new(false);
 
-    if FLAG.load(Ordering::SeqCst) {
-        defmt::info!("OK");
-        debug::exit(debug::EXIT_SUCCESS);
-    } else {
-        defmt::error!("FAILED");
-        debug::exit(debug::EXIT_FAILURE);
+// Tests 30 tasks with the same priority running at the same time
+fn test_saturation() -> TestResult {
+    ACTIVE_COUNT.store(0, Ordering::Relaxed);
+
+    let mut spawned = 0;
+    for _ in 0..30 {
+        let res = whyos::spawn_with_priority(tiny_task, 10);
+
+        if res.is_ok() {
+            spawned += 1;
+        } else {
+            break;
+        }
     }
 
-    halt()
+    whyos::sleep(200);
+
+    let active = ACTIVE_COUNT.load(Ordering::Relaxed);
+
+    check!(active == spawned as u32, "Not all spawned tasks ran");
+
+    Ok(())
 }
 
-
-#[unsafe(no_mangle)]
-extern "C" fn low_prio() -> ! {
-    FLAG.store(true, Ordering::SeqCst);
+extern "C" fn tiny_task() -> ! {
+    ACTIVE_COUNT.fetch_add(1, Ordering::Relaxed);
     whyos::exit();
 }
 
+// Tests strict preemption, low prio task should never run in this case
+fn test_starvation() -> TestResult {
+    COUNTER_A.store(0, Ordering::Relaxed);
+    COUNTER_B.store(0, Ordering::Relaxed);
 
-#[hal::entry]
+    whyos::spawn_with_priority(worker_low, 20).unwrap();
 
-fn main() -> ! {
-    let mut board = Board::init();
+    whyos::spawn_with_priority(worker_high_hog, 5).unwrap();
 
-    whyos::TaskBuilder::new(supervisor_task).priority(1).stack_size(4096).spawn().unwrap();
+    whyos::sleep(200);
 
-    unsafe { whyos::start(&mut board.syst, board.sys_freq / 1000); }
+    let low_cnt = COUNTER_A.load(Ordering::Relaxed);
+    let high_cnt = COUNTER_B.load(Ordering::Relaxed);
+
+    check!(high_cnt > 250, "High priority task didn't run enough");
+    check!(low_cnt == 0, "Low priority task ran! Scheduler failed strict preemption");
+    STOP_FLAG.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+extern "C" fn worker_low() -> ! {
+    COUNTER_A.fetch_add(1, Ordering::Relaxed);
+    whyos::exit();
+}
+
+extern "C" fn worker_high_hog() -> ! {
+    while !STOP_FLAG.load(Ordering::Relaxed) {
+        COUNTER_B.fetch_add(1, Ordering::Relaxed);
+        for _ in 0..1000 { cortex_m::asm::nop(); }
+    }
+    whyos::exit();
+}
+
+// Test fairness for same prio tasks
+fn test_fairness() -> TestResult {
+    COUNTER_A.store(0, Ordering::Relaxed);
+    COUNTER_B.store(0, Ordering::Relaxed);
+    COUNTER_C.store(0, Ordering::Relaxed);
+    COUNTER_D.store(0, Ordering::Relaxed);
+
+    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_A).priority(10).spawn().unwrap();
+    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_B).priority(10).spawn().unwrap();
+    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_C).priority(10).spawn().unwrap();
+    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_D).priority(10).spawn().unwrap();
+
+    whyos::sleep(500);
+
+    let a = COUNTER_A.load(Ordering::Relaxed);
+    let b = COUNTER_B.load(Ordering::Relaxed);
+    let c = COUNTER_C.load(Ordering::Relaxed);
+    let d = COUNTER_D.load(Ordering::Relaxed);
+
+    let min = a.min(b).min(c).min(d);
+    let max = a.max(b).max(c).max(d);
+
+    check!(min > 0, "One or more tasks starved");
+    check!(max < min * 2, "Unfair scheduling");
+
+    Ok(())
+}
+
+extern "C" fn rr_worker(flag: &'static AtomicU32) -> ! { loop { flag.fetch_add(1, Ordering::Relaxed); whyos::yield_cpu(); } }
+
+
+harness! {
+    test_saturation,
+    test_starvation,
+    test_fairness,
 }

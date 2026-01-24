@@ -57,3 +57,11 @@ harness = false
 [[test]]
 name = "test_args"
 harness = false
+
+[[test]]
+name = "test_lifecycle"
+harness = false
+
+[[test]]
+name = "test_itc"
+harness = false

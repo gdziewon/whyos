@@ -1,5 +1,5 @@
 use crate::{hal, board::{Uart, UartRx, UartTx}};
-use whyos::{Mutex, Queue, TaskBuilder};
+use whyos::{Mutex, Queue, StackSize, TaskBuilder};
 
 use hal::pac::interrupt;
 use embedded_hal_nb::serial::Read;
@@ -20,7 +20,7 @@ pub fn init_shell(uart: Uart) {
 
     TaskBuilder::new(shell_task)
         .priority(2)
-        .stack_size(4096)
+        .stack_size(StackSize::MEDIUM)
         .spawn()
         .unwrap();
 }
