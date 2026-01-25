@@ -206,6 +206,7 @@ fn SysTick() {
         kernel.system_ticks += 1;
         let now = kernel.system_ticks;
 
+        // wake up sleeping tasks
         for tid in kernel.sleeping.iter() {
             let task = &mut kernel.tasks[tid];
 
@@ -214,6 +215,19 @@ fn SysTick() {
 
                 kernel.sleeping.remove(tid);
                 kernel.ready.add(tid);
+            }
+        }
+
+        // software watchdog monitoring - ONLY FOR READY TASKS
+        for tid in kernel.ready.iter() {
+            let task = &mut kernel.tasks[tid];
+
+            if let Some(bowl) = task.watchdog_remaining_ticks.as_mut() {
+                if *bowl == 0 {
+                    panic!("Task {} ({}) didn't feed the watchdog for {}",
+                        tid, task.name.unwrap_or("'no name'"), task.watchdog_interval_ticks);
+                }
+                *bowl -= 1;
             }
         }
     });

@@ -8,7 +8,9 @@ pub struct Tcb { // task control block
     pub priority: u8, // lower number = higher priority
     pub wakeup_time: u64,
     pub stack_base: usize,
-    pub stack_size: usize
+    pub stack_size: usize,
+    pub watchdog_remaining_ticks: Option<u64>,
+    pub watchdog_interval_ticks: u64
 }
 
 impl Tcb {
@@ -20,7 +22,9 @@ impl Tcb {
             priority,
             wakeup_time: 0,
             stack_base,
-            stack_size
+            stack_size,
+            watchdog_remaining_ticks: None,
+            watchdog_interval_ticks: 0
         }
     }
 
@@ -32,7 +36,9 @@ impl Tcb {
             priority: u8::MAX,
             wakeup_time: 0,
             stack_base: 0,
-            stack_size: 0
+            stack_size: 0,
+            watchdog_remaining_ticks: None,
+            watchdog_interval_ticks: 0
         }
     }
 }

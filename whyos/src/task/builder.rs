@@ -31,7 +31,7 @@ impl TaskBuilder {
         // cast fn() to fn(usize)
         // when scheduler runs this, it will put garbage in r0 register
         // but the function entry takes no arguments, so it will ignore r0 anyway
-        let entry_transmuted = unsafe { mem::transmute(entry) };
+        let entry_transmuted = unsafe { mem::transmute::<TaskRoutine, stack::TaskEntryPoint>(entry) };
 
         Self::from_raw(entry_transmuted, 0)
     }
@@ -59,7 +59,7 @@ impl TaskBuilder {
         // cast fn(T) to fn(usize)
         // we confirmed that T is both Copy, Send and static
         // and that it fits inside usize
-        let entry_transmuted = unsafe { mem::transmute(entry) };
+        let entry_transmuted = unsafe { mem::transmute::<TaskRoutineArg<_>, stack::TaskEntryPoint>(entry) };
 
         Self::from_raw(entry_transmuted, arg_storage)
     }
@@ -74,7 +74,7 @@ impl TaskBuilder {
     {
         // cast fn(&'static mut T) to fn(usize)
         // reference is just a pointer under the hood
-        let entry_transmuted = unsafe { mem::transmute(entry) };
+        let entry_transmuted = unsafe { mem::transmute::<TaskRoutineArg<_>, stack::TaskEntryPoint>(entry) };
 
         let arg_addr = arg as *mut T as usize;
 
@@ -91,7 +91,7 @@ impl TaskBuilder {
     {
         // cast fn(&'static T) to fn(usize)
         // again, reference is just a pointer under the hood
-        let entry_transmuted = unsafe { mem::transmute(entry) };
+        let entry_transmuted = unsafe { mem::transmute::<TaskRoutineArg<_>, stack::TaskEntryPoint>(entry) };
 
         let arg_addr = arg as *const T as usize;
         Self::from_raw(entry_transmuted, arg_addr)
@@ -105,7 +105,7 @@ impl TaskBuilder {
     ) -> Self {
         // cast fn(*mut T) to fn(usize)
         // function takes pointer, we cast it to pointer-sized-taking function
-        let entry_transmuted = unsafe { mem::transmute(entry) };
+        let entry_transmuted = unsafe { mem::transmute::<TaskRoutineArg<_>, stack::TaskEntryPoint>(entry) };
 
         let arg_addr = arg as usize;
         Self::from_raw(entry_transmuted, arg_addr)
@@ -119,7 +119,7 @@ impl TaskBuilder {
     ) -> Self {
         // cast fn(*const T) to fn(usize)
         // same as above
-        let entry_transmuted = unsafe { mem::transmute(entry) };
+        let entry_transmuted = unsafe { mem::transmute::<TaskRoutineArg<_>, stack::TaskEntryPoint>(entry) };
 
         let arg_addr = arg as usize;
         Self::from_raw(entry_transmuted, arg_addr)

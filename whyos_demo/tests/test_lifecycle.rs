@@ -109,8 +109,39 @@ extern "C" fn mutex_waiter_low(high_tid: whyos::TaskId) {
     whyos::resume(high_tid).unwrap();
 }
 
+const STOP_FEEDING: AtomicBool = AtomicBool::new(false);
+
+fn test_watchdog_feeding() -> TestResult {
+    let feeder = whyos::spawn_with_priority(watchdog_feeder, 3).unwrap();
+    whyos::sleep(10);
+
+    Ok(())
+}
+
+extern "C" fn watchdog_feeder() {
+    whyos::watchdog_subscribe(1);
+    while !STOP_FEEDING.load(Ordering::Relaxed) {
+        whyos::watchdog_feed();
+    }
+}
+
+// SHOULD PANIC
+fn test_watchdog_starving() -> TestResult {
+    whyos::spawn_with_priority(watchdog_starver, 3).unwrap();
+    whyos::sleep(10);
+
+    Ok(())
+}
+
+extern "C" fn watchdog_starver() {
+    whyos::watchdog_subscribe(1);
+    loop {}
+}
+
 harness! {
     test_suspend_resume,
     test_reincarnation,
-    test_suspend_mutex_inversion
+    test_suspend_mutex_inversion,
+    test_watchdog_feeding,
+//    test_watchdog_starving
 }

@@ -67,7 +67,7 @@ impl HwStackFrame {
             r3: 0x33333333,
             r12: 0xCCCCCCCC,
             lr: return_handler as u32, // on exception return, use psp in thread mode
-            pc: entry_point as usize as u32,
+            pc: entry_point as u32,
             xpsr: XPSR_THUMB, // thumb bit, must be set for cortex-m
         }
     }

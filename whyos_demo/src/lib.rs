@@ -60,7 +60,7 @@ macro_rules! harness {
         }
 
         extern "C" fn runner() {
-            defmt::info!("TEST SUITE: {}\n", file!());
+            defmt::info!("TEST SUITE: {}", file!());
 
             let mut any_failed = false;
             $(

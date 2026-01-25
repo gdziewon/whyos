@@ -2,6 +2,11 @@ use crate::scheduler::{self, KERNEL, IDLE_TID};
 use crate::task::{TaskId, TaskState, ResumeContext, TaskInfo};
 use crate::error::{WhyError, WhyResult};
 
+#[inline]
+pub fn yield_now() {
+    scheduler::yield_now();
+}
+
 pub fn sleep(ticks: u64) {
     if ticks == 0 {
         scheduler::yield_now(); // just yield, dont sleep
@@ -132,33 +137,33 @@ pub fn get_task_info(tid: TaskId) -> WhyResult<TaskInfo> {
     })
 }
 
-pub fn current_tid() -> TaskId {
+pub fn get_current_tid() -> TaskId {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
         TaskId(kernel.current_task)
     })
 }
 
-pub fn current_name() -> Option<&'static str> {
+pub fn get_current_name() -> Option<&'static str> {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
         kernel.tasks[kernel.current_task].name
     })
 }
 
-pub fn uptime_ticks() -> u64 {
+pub fn get_uptime_ticks() -> u64 {
     critical_section::with(|cs| {
         KERNEL.borrow(cs).borrow().system_ticks
     })
 }
 
-pub fn task_count() -> usize {
+pub fn get_task_count() -> usize {
     critical_section::with(|cs| {
         KERNEL.borrow(cs).borrow().allocated.ones()
     })
 }
 
-pub fn active_tasks() -> impl Iterator<Item = TaskId> {
+pub fn get_active_tasks() -> impl Iterator<Item = TaskId> {
     let mask = critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
         kernel.allocated // copy it out
@@ -167,6 +172,40 @@ pub fn active_tasks() -> impl Iterator<Item = TaskId> {
     mask.iter().map(TaskId)
 }
 
-pub fn yield_now() {
-    scheduler::yield_now();
+pub fn watchdog_subscribe(interval_ticks: u64) {
+    if interval_ticks == 0 {
+        return;
+    }
+
+    critical_section::with(|cs| {
+        let mut kernel = KERNEL.borrow(cs).borrow_mut();
+        let tid = kernel.current_task;
+        let task = &mut kernel.tasks[tid];
+
+        task.watchdog_interval_ticks = interval_ticks;
+        task.watchdog_remaining_ticks = Some(interval_ticks);
+    })
+}
+
+pub fn watchdog_unsubscribe() {
+    critical_section::with(|cs| {
+        let mut kernel = KERNEL.borrow(cs).borrow_mut();
+        let tid = kernel.current_task;
+        let task = &mut kernel.tasks[tid];
+
+        task.watchdog_interval_ticks = 0;
+        task.watchdog_remaining_ticks = None;
+    })
+}
+
+pub fn watchdog_feed() {
+    critical_section::with(|cs| {
+        let mut kernel = KERNEL.borrow(cs).borrow_mut();
+        let tid = kernel.current_task;
+        let task = &mut kernel.tasks[tid];
+
+        if let Some(bowl) = task.watchdog_remaining_ticks.as_mut() {
+            *bowl = task.watchdog_interval_ticks;
+        }
+    })
 }
