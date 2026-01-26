@@ -1,10 +1,20 @@
 use crate::scheduler::{self, KERNEL, IDLE_TID};
-use crate::task::{TaskId, TaskState, ResumeContext, TaskInfo};
+use crate::task::{ops, TaskId, TaskState, ResumeContext, TaskInfo};
 use crate::error::{WhyError, WhyResult};
 
 #[inline]
 pub fn yield_now() {
     scheduler::yield_now();
+}
+
+#[inline]
+pub fn exit() -> ! {
+    ops::exit()
+}
+
+#[inline]
+pub fn reclaim_memory() -> u8 {
+    ops::reap_zombies()
 }
 
 pub fn sleep(ticks: u64) {

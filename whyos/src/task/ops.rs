@@ -1,4 +1,4 @@
-use crate::scheduler::{yield_now, KERNEL, IDLE_TID, MAX_TASKS};
+use crate::scheduler::{self, KERNEL, IDLE_TID, MAX_TASKS};
 use crate::task::{self, TaskId, TaskState, Tcb};
 use crate::error::{WhyError, WhyResult};
 use crate::memory;
@@ -58,13 +58,13 @@ pub fn exit() -> ! {
         kernel.tasks[current].state = TaskState::Zombie;
     });
 
-    yield_now();
+    scheduler::yield_now();
 
     loop { cortex_m::asm::wfi(); }
 }
 
-pub fn reap_zombies() -> bool {
-    let mut reaped = false;
+pub fn reap_zombies() -> u8 {
+    let mut reaped = 0;
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
@@ -84,7 +84,7 @@ pub fn reap_zombies() -> bool {
 
             kernel.tasks[tid] = Tcb::dead();
 
-            reaped = true;
+            reaped += 1;
         }
     });
 
