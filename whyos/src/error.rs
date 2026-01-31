@@ -1,6 +1,9 @@
 
 pub type WhyResult<T> = Result<T, WhyError>;
 
+pub(crate) const SUCCESS: usize = 0;
+
+
 pub trait ErrNo {
     fn to_errno(self) -> usize;
 }
@@ -46,7 +49,7 @@ impl From<usize> for WhyError {
 
 #[inline(always)]
 pub fn from_errno(errno: usize) -> WhyResult<()> {
-    if errno == 0 {
+    if errno == SUCCESS {
         Ok(())
     } else {
         Err(WhyError::from(errno))

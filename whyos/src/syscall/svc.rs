@@ -1,9 +1,9 @@
 use core::{arch::naked_asm};
 use cortex_m_rt::ExceptionFrame;
 
-use crate::TaskId;
+use crate::{TaskId, TaskInfo};
 use crate::syscall::{self, SvcNumber};
-use crate::error::ErrNo;
+use crate::error::{ErrNo, SUCCESS};
 
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
@@ -24,15 +24,13 @@ pub unsafe extern "C" fn SVCall() { // todo: probably can be optimised
         "beq bootstrap", // branch to bootstrap path
 
         // --- SYSCALL PATH ---
-        "push {{r0, lr}}", // save LR and r0 (containing stack pointer) before calling function
+        "push {{lr}}", // save LR and r0 (containing stack pointer) before calling function
 
         // call dispatch (frame_ptr, svc_num)
         "bl svc_dispatch", // r0 contains the return value
 
         // restore LR
-        "pop {{r2, lr}}",
-
-        "str r0, [r2, #0]", // return value, we overwrite the r0 slot in exception frame (slot 0)
+        "pop {{lr}}",
 
         "bx lr", // return to whatever mode we were in
 
@@ -61,9 +59,7 @@ pub unsafe extern "C" fn SVCall() { // todo: probably can be optimised
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn svc_dispatch(ef: &ExceptionFrame, svc_id: SvcNumber) -> usize {
-    let mut ret_val: usize = 0;
-
+extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: SvcNumber) {
     use SvcNumber as SVC;
     match svc_id {
         SVC::Start => panic!("BOOTSTRAP REJECTION FAILED"),
@@ -77,17 +73,67 @@ extern "C" fn svc_dispatch(ef: &ExceptionFrame, svc_id: SvcNumber) -> usize {
         },
         SVC::Suspend => {
             let tid = TaskId(ef.r0() as usize);
-            ret_val = syscall::suspend(tid).to_errno();
+            unsafe { ef.set_r0(syscall::suspend(tid).to_errno() as u32) };
         },
         SVC::Resume => {
             let tid = TaskId(ef.r0() as usize);
-            ret_val = syscall::resume(tid).to_errno();
+            unsafe { ef.set_r0(syscall::resume(tid).to_errno() as u32) };
         },
         SVC::GetCurrentTid => {
-            ret_val = syscall::get_current_tid().0;
+            unsafe { ef.set_r0(syscall::get_current_tid().0 as u32) };
+        },
+        SVC::GetCurrentName => {
+            match syscall::get_current_name() {
+                Some(name) => unsafe {
+                    ef.set_r0(name.as_ptr() as u32);
+                    ef.set_r1(name.len() as u32);
+                },
+                None => unsafe {
+                    ef.set_r0(0);
+                    ef.set_r1(0);
+                }
+            }
+        },
+        SVC::GetUptimeTicks => {
+            let ticks = syscall::get_uptime_ticks();
+            unsafe {
+                ef.set_r0(ticks as u32);
+                ef.set_r1((ticks >> 32) as u32);
+            }
+        },
+        SVC::GetTaskCount => {
+            unsafe { ef.set_r0(syscall::get_task_count() as u32) };
+        }
+        SVC::GetTaskInfo => {
+            let tid = TaskId(ef.r0() as usize);
+            let task_info_ptr = ef.r1() as *mut TaskInfo;
+
+            match syscall::get_task_info(tid) {
+                Ok(info) => unsafe {
+                    task_info_ptr.write(info);
+                    ef.set_r0(SUCCESS as u32);
+                },
+                Err(e) => unsafe { ef.set_r0(e as u32) },
+            }
+        },
+        SVC::GetActiveTasks => {
+            let allocated_map = syscall::get_allocated_tasks();
+            unsafe { ef.set_r0(allocated_map.0) };
+        },
+        SVC::ReclaimMemory => {
+            let reclaimed = syscall::reclaim_memory();
+            unsafe { ef.set_r0(reclaimed as u32) };
+        },
+        SVC::WatchdogSubscribe => {
+            let interval = (ef.r0() as u64) | ((ef.r1() as u64) << 32);
+            syscall::watchdog_subscribe(interval);
+        },
+        SVC::WatchdogUnsubscribe => {
+            syscall::watchdog_unsubscribe();
+        },
+        SVC::WatchdogFeed => {
+            syscall::watchdog_feed();
         }
         _ => todo!()
     }
-
-    ret_val
 }

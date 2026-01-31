@@ -1,5 +1,5 @@
 use crate::scheduler::{self, KERNEL, IDLE_TID};
-use crate::task::{ops, TaskId, TaskState, ResumeContext, TaskInfo};
+use crate::task::{ResumeContext, TaskId, TaskInfo, TaskMap, TaskState, ops};
 use crate::error::{WhyError, WhyResult};
 
 #[inline]
@@ -13,7 +13,7 @@ pub fn exit() {
 }
 
 #[inline]
-pub fn reclaim_memory() -> u8 {
+pub fn reclaim_memory() -> usize {
     ops::reap_zombies()
 }
 
@@ -173,13 +173,11 @@ pub fn get_task_count() -> usize {
     })
 }
 
-pub fn get_active_tasks() -> impl Iterator<Item = TaskId> {
-    let mask = critical_section::with(|cs| {
+pub fn get_allocated_tasks() -> TaskMap {
+    critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
         kernel.allocated // copy it out
-    });
-
-    mask.iter().map(TaskId)
+    })
 }
 
 pub fn watchdog_subscribe(interval_ticks: u64) {

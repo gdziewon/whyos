@@ -1,7 +1,7 @@
 mod svc;
-mod syscall;
+mod calls;
 
-pub use syscall::*;
+pub use calls::*;
 
 #[repr(u8)]
 pub enum SvcNumber {

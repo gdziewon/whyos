@@ -1,6 +1,7 @@
 use super::{state::TaskState};
 
 #[derive(defmt::Format)]
+#[repr(C)]
 pub struct TaskInfo {
     pub id: usize,
     pub name: Option<&'static str>,

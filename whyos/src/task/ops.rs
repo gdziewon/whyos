@@ -64,8 +64,8 @@ pub fn remove_task() {
     scheduler::yield_now();
 }
 
-pub fn reap_zombies() -> u8 {
-    let mut reaped = 0;
+pub fn reap_zombies() -> usize {
+    let mut reaped_size = 0;
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
@@ -85,11 +85,11 @@ pub fn reap_zombies() -> u8 {
 
             kernel.tasks[tid] = Tcb::dead();
 
-            reaped += 1;
+            reaped_size += size;
         }
     });
 
-    reaped
+    reaped_size
 }
 
 pub fn init_idle_task() { // idle task is ran when every other task can't
