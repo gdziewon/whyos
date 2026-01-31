@@ -8,8 +8,8 @@ pub fn yield_now() {
 }
 
 #[inline]
-pub fn exit() -> ! {
-    ops::exit()
+pub fn exit() {
+    ops::remove_task()
 }
 
 #[inline]

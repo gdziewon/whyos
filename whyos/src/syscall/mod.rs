@@ -1,5 +1,9 @@
+mod svc;
+mod syscall;
 
-#[repr(u32)]
+pub use syscall::*;
+
+#[repr(u8)]
 pub enum SvcNumber {
     Start = 0,
     Yield = 1,
@@ -18,4 +22,11 @@ pub enum SvcNumber {
     WatchdogUnsubscribe = 15,
     WatchdogFeed = 16,
     Spawn = 17,
+}
+
+impl SvcNumber {
+    #[inline(always)]
+    pub const fn id(self) -> u8 {
+        self as u8
+    }
 }

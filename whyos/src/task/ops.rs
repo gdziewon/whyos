@@ -5,7 +5,10 @@ use crate::memory;
 
 const IDLE_STACK_SIZE: usize = 4096; // todo: might be too much
 
-extern "C" fn task_exit_trampoline() -> ! { exit(); }
+extern "C" fn task_exit_trampoline() -> ! {
+    remove_task();
+    panic!()
+}
 
 pub fn spawn(
     entry: task::TaskEntryPoint,
@@ -46,7 +49,7 @@ pub fn spawn(
     })
 }
 
-pub fn exit() -> ! {
+pub fn remove_task() {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
         let current = kernel.current_task;
@@ -59,8 +62,6 @@ pub fn exit() -> ! {
     });
 
     scheduler::yield_now();
-
-    loop { cortex_m::asm::wfi(); }
 }
 
 pub fn reap_zombies() -> u8 {
