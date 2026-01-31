@@ -1,8 +1,21 @@
 mod svc;
 mod calls;
 
+use num_enum::{TryFromPrimitive, IntoPrimitive};
+
 pub use calls::*;
 
+#[repr(C)]
+pub struct SpawnArgs {
+    pub entry: usize,
+    pub arg: usize,
+    pub name_ptr: *const u8,
+    pub name_len: usize,
+    pub stack_size: usize,
+    pub priority: u8,
+}
+
+#[derive(TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum SvcNumber {
     Start = 0,

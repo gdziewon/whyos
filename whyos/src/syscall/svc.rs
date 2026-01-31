@@ -59,9 +59,14 @@ pub unsafe extern "C" fn SVCall() { // todo: probably can be optimised
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: SvcNumber) {
+extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
+    let Ok(svc) = SvcNumber::try_from(svc_id) else {
+        unsafe { ef.set_r0(crate::error::WhyError::InvalidOperation as u32); }
+        return;
+    };
+
     use SvcNumber as SVC;
-    match svc_id {
+    match svc {
         SVC::Start => panic!("BOOTSTRAP REJECTION FAILED"),
         SVC::Yield => { syscall::yield_now(); } // PenSV has lower prio, it will execute once we return from SVC
         SVC::Sleep => {
@@ -133,7 +138,31 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: SvcNumber) {
         },
         SVC::WatchdogFeed => {
             syscall::watchdog_feed();
+        },
+        SVC::Spawn => {
+            let args_ptr = ef.r0() as *const crate::syscall::SpawnArgs;
+            let args = unsafe { &*args_ptr };
+
+            let entry = unsafe { core::mem::transmute::<usize, crate::task::TaskEntryPoint>(args.entry) };
+            let name = if args.name_ptr.is_null() {
+                None
+            } else {
+                Some(unsafe {
+                    core::str::from_utf8_unchecked(
+                        core::slice::from_raw_parts(args.name_ptr, args.name_len)
+                    )
+                })
+            };
+
+            match crate::task::ops::spawn(entry, args.arg, name, args.priority, args.stack_size) {
+                Ok(tid) => unsafe {
+                    ef.set_r0(SUCCESS as u32);
+                    ef.set_r1(tid.0 as u32);
+                },
+                Err(e) => unsafe {
+                    ef.set_r0(e as u32);
+                }
+            }
         }
-        _ => todo!()
     }
 }

@@ -10,4 +10,6 @@ cortex-m-rt = "0.7.5"
 embedded-hal = "1.0.0"
 critical-section = "1.2.0"
 
+num_enum = { version = "0.7", default-features = false }
+
 defmt = "1.0.1"

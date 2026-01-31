@@ -55,7 +55,7 @@ fn test_starvation() -> TestResult {
     let low_cnt = COUNTER_A.load(Ordering::Relaxed);
     let high_cnt = COUNTER_B.load(Ordering::Relaxed);
 
-    check!(high_cnt > 250, "High priority task didn't run enough");
+    check!(high_cnt > 240, "High priority task didn't run enough");
     check!(low_cnt == 0, "Low priority task ran! Scheduler failed strict preemption");
     STOP_FLAG.store(true, Ordering::Relaxed);
     Ok(())

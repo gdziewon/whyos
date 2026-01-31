@@ -1,7 +1,7 @@
-use core::mem;
+use core::{mem, ptr::null};
 
-use super::{TaskId, stack, ops};
-use crate::error::WhyResult;
+use super::{TaskId, stack};
+use crate::{error::WhyResult, syscall::{SpawnArgs, SvcNumber}};
 
 pub type TaskRoutine = extern "C" fn();
 pub type TaskRoutineArg<T> = extern "C" fn(T);
@@ -145,7 +145,28 @@ impl TaskBuilder {
 
     #[inline]
     pub fn spawn(self) -> WhyResult<TaskId> {
-        ops::spawn(self.entry, self.arg, self.name, self.priority, self.stack_size)
+        let args = SpawnArgs {
+            entry: self.entry as usize,
+            arg: self.arg,
+            name_ptr: self.name.map_or(null(), |n| n.as_ptr()),
+            name_len: self.name.map_or(0, |n| n.len()),
+            stack_size: self.stack_size,
+            priority: self.priority
+        };
+        let err: usize;
+        let tid: usize;
+
+        unsafe {
+            core::arch::asm!(
+                "svc {ID}",
+                ID = const SvcNumber::Spawn.id(),
+                inout("r0") &args as *const SpawnArgs as usize => err,
+                out("r1") tid
+            )
+        }
+
+        crate::error::from_errno(err)?;
+        Ok(TaskId(tid))
     }
 }
 
