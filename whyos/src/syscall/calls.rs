@@ -3,6 +3,11 @@ use crate::task::{ResumeContext, TaskId, TaskInfo, TaskMap, TaskState, ops};
 use crate::error::{WhyError, WhyResult};
 
 #[inline]
+pub fn reboot() -> ! {
+    cortex_m::peripheral::SCB::sys_reset();
+}
+
+#[inline]
 pub fn yield_now() {
     scheduler::yield_now();
 }

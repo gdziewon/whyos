@@ -191,6 +191,11 @@ impl StackSize {
     pub const fn kb(kb: usize) -> Self {
         Self(kb * 1024)
     }
+
+    #[inline]
+    pub const fn as_bytes(&self) -> usize {
+        self.0
+    }
 }
 
 impl Default for StackSize {

@@ -35,6 +35,7 @@ pub enum SvcNumber {
     WatchdogUnsubscribe = 15,
     WatchdogFeed = 16,
     Spawn = 17,
+    Reboot = 18,
 }
 
 impl SvcNumber {

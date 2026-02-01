@@ -247,3 +247,14 @@ pub fn watchdog_feed() {
         );
     }
 }
+
+#[inline]
+pub fn reboot() -> ! {
+    unsafe {
+        asm!(
+            "svc {ID}",
+            ID = const SVC::Reboot.id(),
+            options(noreturn)
+        );
+    }
+}

@@ -163,6 +163,9 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
                     ef.set_r0(e as u32);
                 }
             }
+        },
+        SVC::Reboot => {
+            syscall::reboot();
         }
     }
 }

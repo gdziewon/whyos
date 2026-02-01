@@ -6,6 +6,7 @@ use embedded_io::{Write, ErrorType};
 
 use crate::{hal, board::{Uart, UartRx, UartTx}};
 use whyos::{Mutex, Queue, StackSize, TaskBuilder};
+use whyos_shell::{Shell, Program};
 
 
 static SHELL_RX_QUEUE: Queue<u8, 64> = Queue::new();
@@ -49,7 +50,7 @@ pub fn print(args: core::fmt::Arguments) {
 macro_rules! uprintln {
     ($($arg:tt)*) => {
         $crate::shell::print(format_args!($($arg)*));
-        $crate::shell::print("\r\n");
+        $crate::shell::print(format_args!("\r\n"));
     }
 }
 
@@ -63,7 +64,7 @@ pub fn init_shell(uart: Uart) {
     }
 
     TaskBuilder::new(shell_task)
-        .priority(2)
+        .priority(7)
         .stack_size(StackSize::LARGE)
         .name("shell")
         .spawn()
@@ -93,10 +94,30 @@ fn UART0_IRQ() {
     }
 }
 
+extern "C" fn prog_counter(mut count: usize) {
+    uprintln!("\r\n");
+    while count > 0 {
+        uprintln!("{}", count);
+        count -= 1;
+        whyos::sleep(1);
+    }
+}
+
+static PROGRAMS: &[Program] = &[ // todo: add more programs
+    Program {
+        name: "counter",
+        desc: "Counts down from N to 0",
+        entry: prog_counter,
+        default_arg: 10,
+        priority: 2,
+        stack_size: StackSize::SMALL
+    }
+];
+
 #[unsafe(no_mangle)]
 extern "C" fn shell_task() {
     let tx = SharedUart;
 
-    let mut shell = whyos_shell::Shell::new(&SHELL_RX_QUEUE, tx);
+    let mut shell = Shell::new(&SHELL_RX_QUEUE, tx, PROGRAMS);
     shell.run();
 }
