@@ -1,13 +1,57 @@
-use crate::{hal, board::{Uart, UartRx, UartTx}};
-use whyos::{Mutex, Queue, StackSize, TaskBuilder};
+use core::convert::Infallible;
 
 use hal::pac::interrupt;
 use embedded_hal_nb::serial::Read;
+use embedded_io::{Write, ErrorType};
+
+use crate::{hal, board::{Uart, UartRx, UartTx}};
+use whyos::{Mutex, Queue, StackSize, TaskBuilder};
+
 
 static SHELL_RX_QUEUE: Queue<u8, 64> = Queue::new();
 
 static UART_RX: Mutex<Option<UartRx>> = Mutex::new(None);
 static UART_TX: Mutex<Option<UartTx>> = Mutex::new(None);
+
+#[derive(Clone, Copy)]
+pub struct SharedUart;
+
+impl ErrorType for SharedUart {
+    type Error = Infallible;
+}
+
+impl Write for SharedUart {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        let mut guard = UART_TX.lock();
+        if let Some(tx) = guard.as_mut() {
+            tx.write(buf)
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        let mut guard = UART_TX.lock();
+        if let Some(tx) = guard.as_mut() {
+            tx.flush()
+        } else {
+            Ok(())
+        }
+    }
+}
+
+pub fn print(args: core::fmt::Arguments) {
+    let mut writer = SharedUart;
+    let _ = writer.write_fmt(args);
+}
+
+#[macro_export]
+macro_rules! uprintln {
+    ($($arg:tt)*) => {
+        $crate::shell::print(format_args!($($arg)*));
+        $crate::shell::print("\r\n");
+    }
+}
 
 pub fn init_shell(uart: Uart) {
     *(UART_RX.lock()) = Some(uart.rx);
@@ -20,7 +64,8 @@ pub fn init_shell(uart: Uart) {
 
     TaskBuilder::new(shell_task)
         .priority(2)
-        .stack_size(StackSize::MEDIUM)
+        .stack_size(StackSize::LARGE)
+        .name("shell")
         .spawn()
         .unwrap();
 }
@@ -50,11 +95,7 @@ fn UART0_IRQ() {
 
 #[unsafe(no_mangle)]
 extern "C" fn shell_task() {
-    let tx: UartTx;
-    {
-        let mut tx_guard = UART_TX.lock();
-        tx = tx_guard.take().expect("UART TX not initialized"); // take out of mutex to avoid constant locking
-    }
+    let tx = SharedUart;
 
     let mut shell = whyos_shell::Shell::new(&SHELL_RX_QUEUE, tx);
     shell.run();

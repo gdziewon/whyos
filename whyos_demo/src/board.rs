@@ -1,8 +1,8 @@
 use rp235x_hal::{
     self as hal, Clock as _, fugit::RateExtU32 as _,
     gpio::{
-        bank0::{Gpio0, Gpio1},
-        FunctionUart, Pin, PullDown
+        bank0::{Gpio0, Gpio1, Gpio22},
+        FunctionUart, FunctionSioOutput, Pin, PullDown
     },
     pac::{UART0, RESETS},
     uart::{DataBits, StopBits, UartConfig, UartPeripheral, Reader, Writer}
@@ -13,12 +13,14 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
 pub type UartRx = Reader<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
 pub type UartTx = Writer<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
+pub type LedPin = Pin<Gpio22, FunctionSioOutput, PullDown>;
 
 pub struct Board {
     pub syst: SYST,
     pub sys_freq: u32,
     pub resets: RESETS,
     pub uart: Uart,
+    pub led: LedPin, // just a LED I hooked up on GPIO22
 }
 
 pub struct Uart {
@@ -59,6 +61,8 @@ impl Board {
             pins.gpio1.into_function::<FunctionUart>(),
         );
 
+        let led = pins.gpio22.into_push_pull_output();
+
         let mut uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
             .enable(
                 UartConfig::new(115200.Hz(), DataBits::Eight, None, StopBits::One),
@@ -74,7 +78,8 @@ impl Board {
             syst: core.SYST,
             sys_freq,
             resets: pac.RESETS,
-            uart: Uart { rx, tx }
+            uart: Uart { rx, tx },
+            led,
         }
     }
 }

@@ -3,5 +3,6 @@
     "rust-analyzer.check.extraArgs": [
         "--target", "thumbv8m.main-none-eabihf"
     ],
+    "rust-analyzer.cargo.features": ["shell"],
     "debug.onTaskErrors": "abort"
 }

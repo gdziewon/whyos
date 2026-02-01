@@ -9,7 +9,8 @@ mod error;
 
 pub use itc::{Mutex, Queue, Semaphore};
 pub use task::{TaskId, TaskBuilder, TaskInfo, StackSize};
-pub use task::{TaskRoutine, TaskState, ResumeContext};
+pub use task::{TaskRoutine, TaskRoutineArg, TaskState, ResumeContext};
+pub use scheduler::MAX_TASKS;
 
 use core::arch::asm;
 use core::mem::MaybeUninit;
