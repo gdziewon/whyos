@@ -94,6 +94,23 @@ fn UART0_IRQ() {
     }
 }
 
+extern "C" fn prog_fib(mut num: usize) {
+    let mut a: u128 = 0;
+    let mut b: u128 = 1;
+    while num > 0 {
+        (a, b) = (b, match a.checked_add(b) {
+            Some(v) => v,
+            None => {
+                uprintln!("Would overflow u128");
+                return;
+            }
+        });
+        num -= 1;
+    }
+
+    uprintln!("{}", a);
+}
+
 extern "C" fn prog_counter(mut count: usize) {
     uprintln!("\r\n");
     while count > 0 {
@@ -105,9 +122,17 @@ extern "C" fn prog_counter(mut count: usize) {
 
 static PROGRAMS: &[Program] = &[ // todo: add more programs
     Program {
-        name: "counter",
+        name: "cnt",
         desc: "Counts down from N to 0",
         entry: prog_counter,
+        default_arg: 10,
+        priority: 2,
+        stack_size: StackSize::SMALL
+    },
+    Program {
+        name: "fib",
+        desc: "Calculates N-th Fibonacci number (up to 186th)",
+        entry: prog_fib,
         default_arg: 10,
         priority: 2,
         stack_size: StackSize::SMALL

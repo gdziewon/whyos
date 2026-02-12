@@ -4,6 +4,7 @@ const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
 const XPSR_THUMB: u32 = 0x01000000;
 
 pub const STACK_CANARY: u32 = 0xDEADC0DE; // todo: maybe something more random?
+pub const STACK_PAINT: u32 = 0xFEEDFACE;
 
 pub type TaskEntryPoint = extern "C" fn(usize);
 
@@ -14,6 +15,13 @@ pub unsafe fn init_stack(
     arg: usize,
     return_handler: usize
 ) -> usize {
+    // painting for usage calculation
+    let stack_u32 = stack_start as *mut u32;
+    let paint_count = size / size_of::<u32>();
+    for i in 0..paint_count {
+        unsafe { ptr::write_volatile(stack_u32.add(i), STACK_PAINT) };
+    }
+
     let stack_top = unsafe { stack_start.add(size) };
 
     let init_frame = InitStackFrame::new(entry_point as usize, arg, return_handler);
@@ -24,9 +32,29 @@ pub unsafe fn init_stack(
 
     unsafe { ptr::write(frame_ptr, init_frame); }
 
-    unsafe { *(stack_start as *mut u32) = STACK_CANARY; } // for stack overflow protection
+    unsafe { *stack_u32 = STACK_CANARY; } // for stack overflow protection
 
     frame_ptr as usize
+}
+
+pub unsafe fn calculate_stack_usage(stack_start: *mut u8, size: usize) -> usize {
+    let ptr = stack_start as *const u32;
+    let count = size / 4;
+
+    // start at 1 to skip canary
+    for i in 1..count {
+        let val = unsafe { ptr::read_volatile(ptr.add(i)) };
+
+        // found a word that's not paint, we hit the used portion of a stack
+        if val != STACK_PAINT {
+            let unused_words = i;
+            let used_bytes = size - (unused_words * 4);
+            return used_bytes;
+        }
+    }
+
+    // stack completly full or corrupted
+    size
 }
 
 #[repr(C)]

@@ -1,4 +1,5 @@
 #[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct TaskMap(pub(crate) u32); // because MAX_TASKS=32, each bit is representing a task
 
 impl TaskMap {

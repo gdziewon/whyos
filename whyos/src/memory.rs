@@ -72,7 +72,7 @@ pub unsafe fn dealloc(ptr: *mut u8, size: usize) {
 
         let blocks = size.div_ceil(BLOCK_SIZE);
 
-        let mask = if blocks == 64 {
+        let mask = if blocks == POOL_SIZE {
             u64::MAX
         } else {
             (1u64 << blocks) - 1

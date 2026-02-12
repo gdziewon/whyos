@@ -17,15 +17,24 @@ pub fn execute<'a, W: Writer>(cmd: Command, programs: &[Program], writer: &mut W
         }
 
         Command::Ps => {
-            print(writer, " ID | State     | Name\r\n");
-            print(writer, "────+───────────+──────────\r\n");
+            print(writer, " ID | State     | Stack (Peak/Total)   | Name\r\n");
+            print(writer, "────+───────────+──────────────────────+──────────────\r\n");
 
             for tid in whyos::active_tasks() {
                 if let Ok(info) = whyos::task_info(tid) {
                     let name = info.name.unwrap_or("-");
+
+                    // todo: guard again div by 0?
+                    let pct = (info.max_stack_usage * 100) / info.stack_size;
+
                     fprint(writer, format_args!(
-                        " {:>2} | {:<9} | {}\r\n",
-                        info.id, info.state, name
+                        " {:>2} | {:<9} | {:>4} / {:<4} ({:>3}%) | {}\r\n",
+                        info.id,
+                        info.state,
+                        info.max_stack_usage,
+                        info.stack_size,
+                        pct,
+                        name
                     ));
                 }
             }
@@ -34,19 +43,32 @@ pub fn execute<'a, W: Writer>(cmd: Command, programs: &[Program], writer: &mut W
         Command::TaskInfo(tid) => {
             match whyos::task_info(tid) {
                 Ok(info) => {
+                    let stack_top = info.stack_base + info.stack_size;
+                    let current_usage = stack_top.saturating_sub(info.current_sp);
+
                     fprint(writer, format_args!(
-                        "────────────────────────\r\n\
-                            Task ID:      {}\r\n\
-                            Name:         {}\r\n\
-                            State:        {}\r\n\
-                            Priority:     {}\r\n\
-                            Stack Size:   {} bytes\r\n\
-                         ────────────────────────\r\n",
+                        "──────────────────────────────────────────\r\n\
+                        Task ID:      {}\r\n\
+                        Name:         {}\r\n\
+                        State:        {}\r\n\
+                        Priority:     {}\r\n\
+                        ------------------------------------------\r\n\
+                        Stack Base:   0x{:08x}\r\n\
+                        Stack Ptr:    0x{:08x}\r\n\
+                        Stack Size:   {} bytes\r\n\
+                        Current Use:  {} bytes\r\n\
+                        Peak Usage:   {} bytes ({}%)\r\n\
+                        ──────────────────────────────────────────\r\n",
                         info.id,
                         info.name.unwrap_or("<unnamed>"),
                         info.state,
                         info.priority,
-                        info.stack_size
+                        info.stack_base,
+                        info.current_sp,
+                        info.stack_size,
+                        current_usage,
+                        info.max_stack_usage,
+                        (info.max_stack_usage * 100) / info.stack_size
                     ));
                 }
                 Err(_) => print(writer, "Error: Task not found\r\n"),
@@ -97,7 +119,7 @@ pub fn execute<'a, W: Writer>(cmd: Command, programs: &[Program], writer: &mut W
                     prog.desc
                 ));
             }
-            print(writer, "\r\nType 'exec <name> [arg]' to run a program.\r\n");
+            print(writer, "\r\nType 'execute <name> [arg]' to run a program.\r\n");
         }
 
         Command::Invalid(msg) => {

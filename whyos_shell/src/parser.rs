@@ -30,8 +30,7 @@ fn parse_exec<'a>(args: &'a str) -> Command<'a> {
         return Command::Invalid("Usage: exec <name> [arg]");
     }
 
-    // Split "name argument"
-    // If no space is found, arg_str is empty string
+    // if no space is found, arg_str is empty
     let (name, arg_str) = args.split_once(' ').unwrap_or((args, ""));
     let arg_str = arg_str.trim();
 

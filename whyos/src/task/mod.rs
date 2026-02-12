@@ -9,7 +9,7 @@ mod tcb;
 pub use builder::{TaskBuilder, TaskRoutine, TaskRoutineArg, StackSize};
 pub use info::TaskInfo;
 pub use map::TaskMap;
-pub use stack::{init_stack, TaskEntryPoint, STACK_CANARY};
+pub use stack::{init_stack, calculate_stack_usage, TaskEntryPoint, STACK_CANARY};
 pub use state::{TaskState, ResumeContext};
 pub use tcb::Tcb;
 
