@@ -1,100 +1,10 @@
-
-use crate::{TaskId, task::{ResumeContext, STACK_CANARY, TaskMap, TaskState, TaskTable}};
-
-use core::{arch::naked_asm, cell::RefCell};
+use core::arch::naked_asm;
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
-use critical_section::Mutex;
-use defmt::warn;
 
-pub type TaskMask = u8; // FIXME: right now, it can't go above u32, because of active_tasks syscall
-pub const MAX_TASKS: usize = TaskMask::BITS as usize;
-pub const IDLE_TID: TaskId = unsafe { TaskId::new_unchecked(0) };
+use crate::{task::{STACK_CANARY, TaskState}};
+use super::{KERNEL, IDLE_TID, MAX_TASKS};
 
-pub struct KernelState {
-    pub tasks: TaskTable,
-    pub current_task: TaskId,
-    pub system_ticks: u64,
-
-    pub allocated: TaskMap, // who exists
-    pub ready: TaskMap, // wants CPU
-    pub sleeping: TaskMap, // waiting for time
-    pub zombies: TaskMap // waiting to die
-}
-
-pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
-    tasks: TaskTable::new(),
-    current_task: IDLE_TID,
-    system_ticks: 0,
-    allocated: TaskMap::from(1 << IDLE_TID.id()), // first spot reserved for idle task
-    ready: TaskMap::from(1 << IDLE_TID.id()),
-    sleeping: TaskMap::new(),
-    zombies: TaskMap::new()
-}));
-
-pub fn config_systick(syst: &mut cortex_m::peripheral::SYST, freq: u32) {
-    syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-    syst.set_reload(freq);
-    syst.clear_current();
-    syst.enable_counter();
-    syst.enable_interrupt();
-}
-
-pub fn block_current_task() {
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-
-        let curr = kernel.current_task;
-        kernel.tasks[curr].state = TaskState::Blocked;
-
-        kernel.ready.remove(curr);
-    });
-}
-
-pub fn wake_task(tid: TaskId) {
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        let task = &mut kernel.tasks[tid];
-
-        match task.state {
-            TaskState::Blocked => {
-                task.state = TaskState::Ready;
-                kernel.ready.add(tid);
-                kernel.sleeping.remove(tid);
-            },
-            TaskState::Suspended(ResumeContext::Blocked) => {
-                task.state = TaskState::Suspended(ResumeContext::Ready);
-            },
-            _ => { warn!("WhyOS: Waking non blocked task, should never happen")}
-        }
-
-    });
-}
-
-pub fn get_task_priority(tid: TaskId) -> u8 {
-    critical_section::with(|cs| {
-        let kernel = KERNEL.borrow(cs).borrow();
-        kernel.tasks[tid].priority
-    })
-}
-
-pub fn get_current_tid() -> TaskId {
-    critical_section::with(|cs| {
-        KERNEL.borrow(cs).borrow().current_task
-    })
-}
-
-pub fn is_task_suspended(tid: TaskId) -> bool {
-    critical_section::with(|cs| {
-        let kernel = KERNEL.borrow(cs).borrow();
-        matches!(kernel.tasks[tid].state, TaskState::Suspended(_))
-    })
-}
-
-#[inline]
-pub fn yield_now() {
-    cortex_m::peripheral::SCB::set_pendsv();
-}
 
 #[unsafe(no_mangle)]
 extern "C" fn get_idle_task_sp() -> usize {
