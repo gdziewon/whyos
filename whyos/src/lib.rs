@@ -80,7 +80,7 @@ pub fn suspend(tid: TaskId) -> WhyResult<()> {
         asm!(
             "svc {ID}",
             ID = const SVC::Suspend.id(),
-            inout("r0") tid.0 => err,
+            inout("r0") tid.id() => err,
         );
     }
     error::from_errno(err)
@@ -93,7 +93,7 @@ pub fn resume(tid: TaskId) -> WhyResult<()> {
         asm!(
             "svc {ID}",
             ID = const SVC::Resume.id(),
-            inout("r0") tid.0 => err,
+            inout("r0") tid.id() => err,
         );
     }
     error::from_errno(err)
@@ -109,7 +109,7 @@ pub fn current_tid() -> TaskId {
             out("r0") tid,
         );
     }
-    TaskId(tid)
+    unsafe { TaskId::new_unchecked(tid) }
 }
 
 #[inline]
@@ -173,7 +173,7 @@ pub fn task_info(tid: TaskId) -> WhyResult<TaskInfo> {
         asm!(
             "svc {ID}",
             ID = const SVC::GetTaskInfo.id(),
-            inout("r0") tid.0 => err,
+            inout("r0") tid.id() => err,
             in("r1") task_info.as_mut_ptr()
         );
     }
@@ -198,7 +198,6 @@ pub fn active_tasks() -> impl Iterator<Item = TaskId> {
 
     TaskMap::from(active_tasks as u32)
         .iter()
-        .map(TaskId)
 }
 
 #[inline]

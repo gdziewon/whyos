@@ -112,7 +112,7 @@ extern "C" fn mutex_waiter_low(high_tid: whyos::TaskId) {
 const STOP_FEEDING: AtomicBool = AtomicBool::new(false);
 
 fn test_watchdog_feeding() -> TestResult {
-    let feeder = whyos::spawn_with_priority(watchdog_feeder, 3).unwrap();
+    let _feeder = whyos::spawn_with_priority(watchdog_feeder, 3).unwrap();
     whyos::sleep(10);
 
     Ok(())
@@ -126,6 +126,7 @@ extern "C" fn watchdog_feeder() {
 }
 
 // SHOULD PANIC
+#[allow(dead_code)]
 fn test_watchdog_starving() -> TestResult {
     whyos::spawn_with_priority(watchdog_starver, 3).unwrap();
     whyos::sleep(10);

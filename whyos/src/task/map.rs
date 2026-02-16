@@ -1,3 +1,5 @@
+use super::TaskId;
+
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct TaskMap(pub(crate) u32); // because MAX_TASKS=32, each bit is representing a task
@@ -12,13 +14,13 @@ impl TaskMap {
     }
 
     #[inline]
-    pub fn add(&mut self, tid: usize) {
-        self.0 |= 1 << tid;
+    pub fn add(&mut self, tid: TaskId) {
+        self.0 |= 1 << tid.id();
     }
 
     #[inline]
-    pub fn remove(&mut self, tid: usize) {
-        self.0 &= !(1 << tid);
+    pub fn remove(&mut self, tid: TaskId) {
+        self.0 &= !(1 << tid.id());
     }
 
     #[inline]
@@ -27,8 +29,8 @@ impl TaskMap {
     }
 
     #[inline]
-    pub fn is_set(&self, pos: usize) -> bool {
-        (self.0 & (1 << pos)) != 0
+    pub fn is_set(&self, tid: TaskId) -> bool {
+        (self.0 & (1 << tid.id())) != 0
     }
 
     #[inline]
@@ -57,7 +59,7 @@ pub struct TaskMapIter {
 }
 
 impl Iterator for TaskMapIter {
-    type Item = usize;
+    type Item = TaskId;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
@@ -69,7 +71,8 @@ impl Iterator for TaskMapIter {
 
         self.mask &= !(1 << tid);
 
-        Some(tid as usize)
+        // # SAFETY: We get indexes of ones in u32, it will be less then 32
+        Some(unsafe { TaskId::new_unchecked(tid as usize) })
     }
 }
 
@@ -79,20 +82,20 @@ pub struct TaskMapCircularIter {
 }
 
 impl Iterator for TaskMapCircularIter {
-    type Item = usize;
+    type Item = TaskId;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> { // wrapping iter
         if self.upper != 0 {
             let tid = self.upper.trailing_zeros();
             self.upper &= !(1 << tid);
-            return Some(tid as usize);
+            return Some(unsafe { TaskId::new_unchecked(tid as usize) })
         }
 
         if self.lower != 0 {
             let tid = self.lower.trailing_zeros();
             self.lower &= !(1 << tid);
-            return Some(tid as usize);
+            return Some(unsafe { TaskId::new_unchecked(tid as usize) })
         }
 
         None

@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, mem::MaybeUninit};
 use critical_section::Mutex as CSMutex;
 
-use crate::{task::TaskMap, scheduler, itc::pop_highest_prio};
+use crate::{task::TaskMap, scheduler, itc::pop_highest_prio_tid};
 
 pub struct Queue<T, const N: usize> {
     data: UnsafeCell<MaybeUninit<[T; N]>>,
@@ -68,7 +68,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
 
                     state.prod_waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
 
-                    if let Some(tid) = pop_highest_prio(&mut state.cons_waiting) {
+                    if let Some(tid) = pop_highest_prio_tid(&mut state.cons_waiting) {
                         scheduler::wake_task(tid);
                         true
                     } else {
@@ -107,7 +107,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             state.write_idx = (state.write_idx + 1) % CAPACITY;
             state.count += 1;
 
-            if let Some(tid) = pop_highest_prio(&mut state.cons_waiting) {
+            if let Some(tid) = pop_highest_prio_tid(&mut state.cons_waiting) {
                 scheduler::wake_task(tid);
                 // wont yield here, caller should do it manually if needed
             }
@@ -144,7 +144,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
 
                     state.cons_waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
 
-                    if let Some(tid) = pop_highest_prio(&mut state.prod_waiting) {
+                    if let Some(tid) = pop_highest_prio_tid(&mut state.prod_waiting) {
                         scheduler::wake_task(tid);
                         true
                     } else {
@@ -182,7 +182,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             state.read_idx = (state.read_idx + 1) % CAPACITY;
             state.count -= 1;
 
-            if let Some(tid) = pop_highest_prio(&mut state.prod_waiting) {
+            if let Some(tid) = pop_highest_prio_tid(&mut state.prod_waiting) {
                 scheduler::wake_task(tid);
                 // wont yield here, caller should do it manually if needed
             }

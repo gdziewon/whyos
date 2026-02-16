@@ -166,7 +166,7 @@ impl TaskBuilder {
         }
 
         crate::error::from_errno(err)?;
-        Ok(TaskId(tid))
+        Ok(TaskId::new(tid)?)
     }
 }
 

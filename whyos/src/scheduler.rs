@@ -1,5 +1,5 @@
 
-use crate::task::{ResumeContext, STACK_CANARY, TaskMap, TaskState, Tcb};
+use crate::{TaskId, task::{ResumeContext, STACK_CANARY, TaskMap, TaskState, TaskTable}};
 
 use core::{arch::naked_asm, cell::RefCell};
 use cortex_m::peripheral::SCB;
@@ -7,12 +7,13 @@ use cortex_m_rt::exception;
 use critical_section::Mutex;
 use defmt::warn;
 
-pub const MAX_TASKS: usize = 32; // this should stay hardcoded
-pub const IDLE_TID: usize = 0;
+pub type TaskMask = u32; // TODO: just an idea for now, should be used in bitmaps
+pub const MAX_TASKS: usize = TaskMask::BITS as usize;
+pub const IDLE_TID: TaskId = unsafe { TaskId::new_unchecked(0) };
 
 pub struct KernelState {
-    pub tasks: [Tcb; MAX_TASKS],
-    pub current_task: usize,
+    pub tasks: TaskTable,
+    pub current_task: TaskId,
     pub system_ticks: u64,
 
     pub allocated: TaskMap, // who exists
@@ -22,11 +23,11 @@ pub struct KernelState {
 }
 
 pub static KERNEL: Mutex<RefCell<KernelState>> = Mutex::new(RefCell::new(KernelState {
-    tasks: [Tcb::dead(); MAX_TASKS],
+    tasks: TaskTable::new(),
     current_task: IDLE_TID,
     system_ticks: 0,
-    allocated: TaskMap::from(1 << IDLE_TID), // first spot reserved for idle task
-    ready: TaskMap::from(1 << IDLE_TID),
+    allocated: TaskMap::from(1 << IDLE_TID.id()), // first spot reserved for idle task
+    ready: TaskMap::from(1 << IDLE_TID.id()),
     sleeping: TaskMap::new(),
     zombies: TaskMap::new()
 }));
@@ -43,14 +44,14 @@ pub fn block_current_task() {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
 
-        let current = kernel.current_task;
-        kernel.tasks[current].state = TaskState::Blocked;
+        let curr = kernel.current_task;
+        kernel.tasks[curr].state = TaskState::Blocked;
 
-        kernel.ready.remove(current);
+        kernel.ready.remove(curr);
     });
 }
 
-pub fn wake_task(tid: usize) {
+pub fn wake_task(tid: TaskId) {
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
         let task = &mut kernel.tasks[tid];
@@ -70,20 +71,20 @@ pub fn wake_task(tid: usize) {
     });
 }
 
-pub fn get_task_priority(tid: usize) -> u8 {
+pub fn get_task_priority(tid: TaskId) -> u8 {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
         kernel.tasks[tid].priority
     })
 }
 
-pub fn get_current_tid() -> usize {
+pub fn get_current_tid() -> TaskId {
     critical_section::with(|cs| {
         KERNEL.borrow(cs).borrow().current_task
     })
 }
 
-pub fn is_task_suspended(tid: usize) -> bool {
+pub fn is_task_suspended(tid: TaskId) -> bool {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
         matches!(kernel.tasks[tid].state, TaskState::Suspended(_))
@@ -112,7 +113,7 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         if kernel.tasks[current].state != TaskState::Dead {
             let canary_val = unsafe { *(kernel.tasks[current].stack_base as *const u32)};
             if canary_val != STACK_CANARY {
-                panic!("KERNEL PANIC: Stack Overflow detected in Task {}", current);
+                panic!("KERNEL PANIC: Stack Overflow detected in Task {}", current.id());
             }
         }
 
@@ -122,7 +123,7 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         }
 
         // start searching from (current + 1) for round robin
-        let next = (current + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
+        let next = (current.id() + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
 
         let best_task = kernel.ready
             .iter_from(next)
@@ -206,7 +207,7 @@ fn SysTick() {
             if let Some(bowl) = task.watchdog_remaining_ticks.as_mut() {
                 if *bowl == 0 {
                     panic!("Task {} ({}) didn't feed the watchdog for {}",
-                        tid, task.name.unwrap_or("'no name'"), task.watchdog_interval_ticks);
+                        tid.id(), task.name.unwrap_or("'no name'"), task.watchdog_interval_ticks);
                 }
                 *bowl -= 1;
             }

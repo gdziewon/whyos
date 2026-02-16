@@ -1,9 +1,10 @@
 use core::{arch::naked_asm};
 use cortex_m_rt::ExceptionFrame;
 
+use crate::task::{TaskEntryPoint, ops};
 use crate::{TaskId, TaskInfo};
 use crate::syscall::{self, SvcNumber};
-use crate::error::{ErrNo, SUCCESS};
+use crate::error::{ErrNo, SUCCESS, WhyError};
 
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
@@ -61,7 +62,7 @@ pub unsafe extern "C" fn SVCall() { // todo: probably can be optimised
 #[unsafe(no_mangle)]
 extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
     let Ok(svc) = SvcNumber::try_from(svc_id) else {
-        unsafe { ef.set_r0(crate::error::WhyError::InvalidOperation as u32); }
+        unsafe { ef.set_r0(WhyError::InvalidOperation as u32); }
         return;
     };
 
@@ -77,15 +78,26 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
             syscall::exit();
         },
         SVC::Suspend => {
-            let tid = TaskId(ef.r0() as usize);
-            unsafe { ef.set_r0(syscall::suspend(tid).to_errno() as u32) };
+            let res = TaskId::new(ef.r0() as usize)
+                .and_then(
+                    syscall::suspend
+                )
+                .to_errno();
+
+            unsafe { ef.set_r0(res as u32) };
         },
         SVC::Resume => {
-            let tid = TaskId(ef.r0() as usize);
-            unsafe { ef.set_r0(syscall::resume(tid).to_errno() as u32) };
+            let res = TaskId::new(ef.r0() as usize)
+                .and_then(
+                    syscall::resume
+                )
+                .to_errno();
+
+            unsafe { ef.set_r0(res as u32) };
         },
         SVC::GetCurrentTid => {
-            unsafe { ef.set_r0(syscall::get_current_tid().0 as u32) };
+            let tid= syscall::get_current_tid().id();
+            unsafe { ef.set_r0(tid as u32) };
         },
         SVC::GetCurrentName => {
             match syscall::get_current_name() {
@@ -110,13 +122,18 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
             unsafe { ef.set_r0(syscall::get_task_count() as u32) };
         }
         SVC::GetTaskInfo => {
-            let tid = TaskId(ef.r0() as usize);
-            let task_info_ptr = ef.r1() as *mut TaskInfo;
+            let res = TaskId::new(ef.r0() as usize)
+                .and_then(
+                    syscall::get_task_info
+                );
 
-            match syscall::get_task_info(tid) {
-                Ok(info) => unsafe {
-                    task_info_ptr.write(info);
-                    ef.set_r0(SUCCESS as u32);
+            match res {
+                Ok(info) => {
+                    let out_ptr = ef.r1() as *mut TaskInfo;
+                    unsafe {
+                        out_ptr.write(info);
+                        ef.set_r0(SUCCESS as u32);
+                    }
                 },
                 Err(e) => unsafe { ef.set_r0(e as u32) },
             }
@@ -140,10 +157,10 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
             syscall::watchdog_feed();
         },
         SVC::Spawn => {
-            let args_ptr = ef.r0() as *const crate::syscall::SpawnArgs;
+            let args_ptr = ef.r0() as *const syscall::SpawnArgs;
             let args = unsafe { &*args_ptr };
 
-            let entry = unsafe { core::mem::transmute::<usize, crate::task::TaskEntryPoint>(args.entry) };
+            let entry = unsafe { core::mem::transmute::<usize, TaskEntryPoint>(args.entry) };
             let name = if args.name_ptr.is_null() {
                 None
             } else {
@@ -154,10 +171,10 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
                 })
             };
 
-            match crate::task::ops::spawn(entry, args.arg, name, args.priority, args.stack_size) {
+            match ops::spawn(entry, args.arg, name, args.priority, args.stack_size) {
                 Ok(tid) => unsafe {
                     ef.set_r0(SUCCESS as u32);
-                    ef.set_r1(tid.0 as u32);
+                    ef.set_r1(tid.id() as u32);
                 },
                 Err(e) => unsafe {
                     ef.set_r0(e as u32);

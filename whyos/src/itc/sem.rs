@@ -2,7 +2,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex as CSMutex;
 
-use crate::{task::TaskMap, scheduler, itc::pop_highest_prio};
+use crate::{task::TaskMap, scheduler, itc::pop_highest_prio_tid};
 
 pub struct Semaphore {
     state: CSMutex<RefCell<SemState>>
@@ -90,7 +90,7 @@ impl Semaphore {
                 state.permits += 1;
             }
 
-            if let Some(tid) = pop_highest_prio(&mut state.waiting) {
+            if let Some(tid) = pop_highest_prio_tid(&mut state.waiting) {
                 scheduler::wake_task(tid);
                 true
             } else {

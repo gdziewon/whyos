@@ -1,9 +1,11 @@
+use crate::TaskId;
+
 use super::state::TaskState;
 
 #[derive(defmt::Format)]
 #[repr(C)]
 pub struct TaskInfo {
-    pub id: usize,
+    pub tid: TaskId,
     pub name: Option<&'static str>,
     pub state: TaskState,
     pub priority: u8,

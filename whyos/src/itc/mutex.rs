@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, ops::{Deref, DerefMut}};
 use critical_section::Mutex as CSMutex;
 
-use crate::{task::TaskMap, scheduler, itc::pop_highest_prio};
+use crate::{TaskId, itc::pop_highest_prio_tid, scheduler, task::TaskMap};
 
 pub struct Mutex<T> {
     data: UnsafeCell<T>,
@@ -10,7 +10,7 @@ pub struct Mutex<T> {
 
 struct MutexState {
     locked: bool,
-    owner: Option<usize>,
+    owner: Option<TaskId>,
     waiting: TaskMap
 }
 
@@ -121,7 +121,7 @@ impl<T> Mutex<T> {
             state.locked = false;
             state.owner = None;
 
-            if let Some(tid) = pop_highest_prio(&mut state.waiting) {
+            if let Some(tid) = pop_highest_prio_tid(&mut state.waiting) {
                 scheduler::wake_task(tid);
                 true
             } else {

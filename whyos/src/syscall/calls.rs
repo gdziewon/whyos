@@ -45,8 +45,6 @@ pub fn sleep(ticks: u64) {
 }
 
 pub fn suspend(tid: TaskId) -> WhyResult<()> {
-    let tid = tid.0;
-
     if tid == IDLE_TID {
         return Err(WhyError::InvalidOperation);
     }
@@ -83,8 +81,6 @@ pub fn suspend(tid: TaskId) -> WhyResult<()> {
 }
 
 pub fn resume(tid: TaskId) -> WhyResult<()> {
-    let tid = tid.0;
-
     if tid == IDLE_TID {
         return Err(WhyError::InvalidOperation);
     }
@@ -134,7 +130,6 @@ pub fn resume(tid: TaskId) -> WhyResult<()> {
 pub fn get_task_info(tid: TaskId) -> WhyResult<TaskInfo> {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
-        let tid = tid.0;
 
         if !kernel.allocated.is_set(tid) {
             return Err(WhyError::InvalidTaskId);
@@ -143,7 +138,7 @@ pub fn get_task_info(tid: TaskId) -> WhyResult<TaskInfo> {
         let task = &kernel.tasks[tid];
 
         Ok(TaskInfo {
-            id: tid,
+            tid,
             name: task.name,
             state: task.state,
             priority: task.priority,
@@ -163,7 +158,7 @@ pub fn get_task_info(tid: TaskId) -> WhyResult<TaskInfo> {
 pub fn get_current_tid() -> TaskId {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
-        TaskId(kernel.current_task)
+        kernel.current_task
     })
 }
 

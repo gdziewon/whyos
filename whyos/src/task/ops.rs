@@ -1,4 +1,4 @@
-use crate::scheduler::{self, KERNEL, IDLE_TID, MAX_TASKS};
+use crate::scheduler::{self, KERNEL, IDLE_TID};
 use crate::task::{self, TaskId, TaskState, Tcb};
 use crate::error::{WhyError, WhyResult};
 use crate::memory;
@@ -37,15 +37,13 @@ pub fn spawn(
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
 
-        let tid = (!kernel.allocated.0).trailing_zeros() as usize;
-        if tid >= MAX_TASKS {
-            return Err(WhyError::MaxTasksReached);
-        }
+        // FIXME: do sth about it in next commit
+        let tid = TaskId::new((!kernel.allocated.0).trailing_zeros() as usize)?;
 
         kernel.allocated.add(tid);
         kernel.ready.add(tid);
         kernel.tasks[tid] = Tcb::ready(name, sp, priority, stack.ptr as usize, stack.size);
-        Ok(TaskId(tid))
+        Ok(tid)
     })
 }
 

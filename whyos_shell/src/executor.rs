@@ -1,7 +1,7 @@
 use crate::{Program, fprint, print};
 use crate::{Writer, Command, HELP_MSG};
 
-pub fn execute<'a, W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
+pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
 {
     match cmd {
         Command::Empty => (),
@@ -17,8 +17,8 @@ pub fn execute<'a, W: Writer>(cmd: Command, programs: &[Program], writer: &mut W
         }
 
         Command::Ps => {
-            print(writer, " ID | State     | Stack (Peak/Total)   | Name\r\n");
-            print(writer, "────+───────────+──────────────────────+──────────────\r\n");
+            print(writer, " ID | State     | Stack(Peak/Total) | Name\r\n");
+            print(writer, "────+───────────+───────────────────+──────────────\r\n");
 
             for tid in whyos::active_tasks() {
                 if let Ok(info) = whyos::task_info(tid) {
@@ -28,8 +28,8 @@ pub fn execute<'a, W: Writer>(cmd: Command, programs: &[Program], writer: &mut W
                     let pct = (info.max_stack_usage * 100) / info.stack_size;
 
                     fprint(writer, format_args!(
-                        " {:>2} | {:<9} | {:>4} / {:<4} ({:>3}%) | {}\r\n",
-                        info.id,
+                        " {:>2} | {:<9} | {:>4} / {:<4} ({:>2}%) | {}\r\n",
+                        info.tid.id(),
                         info.state,
                         info.max_stack_usage,
                         info.stack_size,
@@ -59,7 +59,7 @@ pub fn execute<'a, W: Writer>(cmd: Command, programs: &[Program], writer: &mut W
                         Current Use:  {} bytes\r\n\
                         Peak Usage:   {} bytes ({}%)\r\n\
                         ──────────────────────────────────────────\r\n",
-                        info.id,
+                        info.tid.id(),
                         info.name.unwrap_or("<unnamed>"),
                         info.state,
                         info.priority,
