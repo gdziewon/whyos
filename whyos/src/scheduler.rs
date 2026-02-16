@@ -7,7 +7,7 @@ use cortex_m_rt::exception;
 use critical_section::Mutex;
 use defmt::warn;
 
-pub type TaskMask = u32; // TODO: just an idea for now, should be used in bitmaps
+pub type TaskMask = u8; // FIXME: right now, it can't go above u32, because of active_tasks syscall
 pub const MAX_TASKS: usize = TaskMask::BITS as usize;
 pub const IDLE_TID: TaskId = unsafe { TaskId::new_unchecked(0) };
 

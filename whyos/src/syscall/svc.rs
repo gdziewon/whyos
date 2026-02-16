@@ -140,7 +140,7 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
         },
         SVC::GetActiveTasks => {
             let allocated_map = syscall::get_allocated_tasks();
-            unsafe { ef.set_r0(allocated_map.0) };
+            unsafe { ef.set_r0(allocated_map.0.try_into().unwrap()) }; // FIXME: unwrap to check for errors for now
         },
         SVC::ReclaimMemory => {
             let reclaimed = syscall::reclaim_memory();

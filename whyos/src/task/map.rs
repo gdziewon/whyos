@@ -1,15 +1,16 @@
 use super::TaskId;
+use crate::scheduler::TaskMask;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct TaskMap(pub(crate) u32); // because MAX_TASKS=32, each bit is representing a task
+pub struct TaskMap(pub(crate) TaskMask); // because MAX_TASKS=32, each bit is representing a task
 
 impl TaskMap {
     pub const fn new() -> Self {
         Self(0)
     }
 
-    pub const fn from(value: u32) -> Self {
+    pub const fn from(value: TaskMask) -> Self {
         Self(value)
     }
 
@@ -44,8 +45,8 @@ impl TaskMap {
     }
 
     #[inline]
-    pub fn iter_from(self, start_bit: usize) -> TaskMapCircularIter { // start bit needs to be less then 32!
-        let mask_lower = (1u32 << start_bit).wrapping_sub(1);
+    pub fn iter_from(self, start_bit: usize) -> TaskMapCircularIter { // FIXME: start bit needs to be less then 32!
+        let mask_lower = ((1 as TaskMask) << start_bit).wrapping_sub(1);
 
         TaskMapCircularIter {
             upper: self.0 & !mask_lower,
@@ -55,7 +56,7 @@ impl TaskMap {
 }
 
 pub struct TaskMapIter {
-    mask: u32,
+    mask: TaskMask,
 }
 
 impl Iterator for TaskMapIter {
@@ -77,8 +78,8 @@ impl Iterator for TaskMapIter {
 }
 
 pub struct TaskMapCircularIter {
-    upper: u32,
-    lower: u32,
+    upper: TaskMask,
+    lower: TaskMask,
 }
 
 impl Iterator for TaskMapCircularIter {

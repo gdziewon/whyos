@@ -18,6 +18,7 @@ use core::mem::MaybeUninit;
 use error::WhyResult;
 use syscall::SvcNumber as SVC;
 
+use crate::scheduler::TaskMask;
 use crate::task::TaskMap;
 
 /// # Safety
@@ -187,7 +188,7 @@ pub fn task_info(tid: TaskId) -> WhyResult<TaskInfo> {
 
 #[inline]
 pub fn active_tasks() -> impl Iterator<Item = TaskId> {
-    let active_tasks: usize;
+    let active_tasks: TaskMask;
     unsafe {
         asm!(
             "svc {ID}",
@@ -196,7 +197,7 @@ pub fn active_tasks() -> impl Iterator<Item = TaskId> {
         );
     }
 
-    TaskMap::from(active_tasks as u32)
+    TaskMap::from(active_tasks)
         .iter()
 }
 
