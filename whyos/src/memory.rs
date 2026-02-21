@@ -22,9 +22,19 @@ static MEMORY: Mutex<UnsafeCell<MemoryPool>> = Mutex::new(UnsafeCell::new(Memory
 }));
 
 pub struct MemChunk {
-    pub ptr: *mut u8,
-    pub size: usize,
+    ptr: *mut u8,
+    size: usize,
 }
+
+impl MemChunk {
+    #[inline]
+    pub fn ptr(&self) -> *mut u8 { self.ptr }
+
+    #[inline]
+    pub fn size(&self) -> usize { self.size }
+}
+
+unsafe impl Send for MemChunk {}
 
 // rounds up the size to multiple of 1024 (kb)
 pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
@@ -62,15 +72,15 @@ pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
     })
 }
 
-pub unsafe fn dealloc(ptr: *mut u8, size: usize) {
+pub unsafe fn dealloc(chunk: MemChunk) {
     critical_section::with(|cs| {
         let pool = unsafe { &mut *MEMORY.borrow(cs).get() };
         let base_ptr = pool.buffer.as_mut_ptr() as *mut u8;
 
-        let offset = ptr as usize - base_ptr as usize;
+        let offset = chunk.ptr as usize - base_ptr as usize;
         let start_bit = offset / BLOCK_SIZE;
 
-        let blocks = size.div_ceil(BLOCK_SIZE);
+        let blocks = chunk.size.div_ceil(BLOCK_SIZE);
 
         let mask = if blocks == POOL_SIZE {
             u64::MAX

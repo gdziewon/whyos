@@ -6,7 +6,7 @@ pub struct TaskTable([Tcb; MAX_TASKS]);
 
 impl TaskTable {
     pub const fn new() -> Self {
-        Self([Tcb::dead(); MAX_TASKS])
+        Self([const { Tcb::dead() }; MAX_TASKS])
     }
 }
 

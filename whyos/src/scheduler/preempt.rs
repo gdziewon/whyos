@@ -21,7 +21,8 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         let current = kernel.current_task;
 
         if kernel.tasks[current].state != TaskState::Dead {
-            let canary_val = unsafe { *(kernel.tasks[current].stack_base as *const u32)};
+            // FIXME: looks digusting now I know
+            let canary_val = unsafe { *(kernel.tasks[current].stack.as_ref().unwrap().ptr() as *const u32)};
             if canary_val != STACK_CANARY {
                 panic!("KERNEL PANIC: Stack Overflow detected in Task {}", current.id());
             }

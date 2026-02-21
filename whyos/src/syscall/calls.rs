@@ -137,21 +137,20 @@ pub fn get_task_info(tid: TaskId) -> WhyResult<TaskInfo> {
 
         let task = &kernel.tasks[tid];
 
-        Ok(TaskInfo {
-            tid,
-            name: task.name,
-            state: task.state,
-            priority: task.priority,
-            current_sp: task.sp,
-            stack_base: task.stack_base,
-            stack_size: task.stack_size,
-            max_stack_usage: unsafe {
-                calculate_stack_usage(
-                    task.stack_base as *mut u8,
-                    task.stack_size
-                )
-            }
-        })
+        if let Some(stack) = &task.stack {
+            Ok(TaskInfo {
+                tid,
+                name: task.name,
+                state: task.state,
+                priority: task.priority,
+                current_sp: task.sp,
+                stack_base: stack.ptr() as usize,
+                stack_size: stack.size(),
+                max_stack_usage: calculate_stack_usage(&stack),
+            })
+        } else {
+            Err(WhyError::InternalError) // FIXME: add more errors
+        }
     })
 }
 

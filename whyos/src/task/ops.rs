@@ -26,11 +26,11 @@ pub fn spawn(
     };
 
     let sp = unsafe {
-        task::init_stack(stack.ptr,
-            stack.size,
+        task::init_stack(
+            &stack,
             entry,
             arg,
-            task_exit_trampoline as usize
+            task_exit_trampoline as *const () as usize
         )
     };
 
@@ -42,7 +42,7 @@ pub fn spawn(
 
         kernel.allocated.add(tid);
         kernel.ready.add(tid);
-        kernel.tasks[tid] = Tcb::ready(name, sp, priority, stack.ptr as usize, stack.size);
+        kernel.tasks[tid] = Tcb::ready(name, sp, priority, stack);
         Ok(tid)
     })
 }
@@ -71,19 +71,16 @@ pub fn reap_zombies() -> usize {
         for tid in kernel.zombies.iter() {
             let task = &mut kernel.tasks[tid];
 
-            let ptr = task.stack_base as *mut u8;
-            let size = task.stack_size;
+            if let Some(stack) = task.stack.take() {
+                reaped_size += stack.size();
 
-            if !ptr.is_null() && size > 0 {
-                unsafe { memory::dealloc(ptr, size); }
+                kernel.zombies.remove(tid);
+                kernel.allocated.remove(tid);
+
+                kernel.tasks[tid] = Tcb::dead();
+
+                unsafe { memory::dealloc(stack); }
             }
-
-            kernel.zombies.remove(tid);
-            kernel.allocated.remove(tid);
-
-            kernel.tasks[tid] = Tcb::dead();
-
-            reaped_size += size;
         }
     });
 
@@ -100,20 +97,22 @@ pub fn init_idle_task() { // idle task is ran when every other task can't
 
     let stack = match memory::alloc(IDLE_STACK_SIZE) {
         Some(mem) => mem,
-        None => panic!("WhyOS: Out of Memory")
+        None => panic!("WhyOS: Couldn't allocate Idle Task")
     };
 
+
+    let return_handler = task_exit_trampoline as *const () as usize;
     let sp = unsafe {
-        task::init_stack(stack.ptr,
-            stack.size,
+        task::init_stack(
+            &stack,
             idle_task,
             0,
-            task_exit_trampoline as usize
+            return_handler
         )
     };
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        kernel.tasks[IDLE_TID] = Tcb::ready(Some("idle"), sp, u8::MAX, stack.ptr as usize, stack.size);
+        kernel.tasks[IDLE_TID] = Tcb::ready(Some("idle"), sp, u8::MAX, stack);
     });
 }
