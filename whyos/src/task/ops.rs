@@ -32,7 +32,8 @@ pub fn spawn(
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
 
         // FIXME: do sth about it in next commit
-        let tid = TaskId::new((!kernel.allocated.0).trailing_zeros() as usize)?;
+        let tid = kernel.allocated.first_free()
+            .ok_or(WhyError::OutOfMemory)?; // todo: more errors, here MAXTASKSREACHED or sth
 
         kernel.allocated.add(tid);
         kernel.ready.add(tid);
@@ -73,7 +74,7 @@ pub fn reap_zombies() -> usize {
 
                 kernel.tasks[tid] = Tcb::dead();
 
-                unsafe { memory::dealloc(stack.into_chunk()); }
+                memory::dealloc(stack.into_chunk());
             }
         }
     });

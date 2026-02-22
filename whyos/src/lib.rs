@@ -6,6 +6,7 @@ mod task;
 mod itc;
 mod memory;
 mod error;
+mod utils;
 
 pub use itc::{Mutex, Queue, Semaphore};
 pub use task::{TaskId, TaskBuilder, TaskInfo, StackSize};

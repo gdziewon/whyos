@@ -20,7 +20,7 @@ impl TaskId {
     }
 
     #[inline]
-    pub const unsafe fn new_unchecked(id: usize) -> Self {
+    pub(crate) const unsafe fn new_unchecked(id: usize) -> Self {
         Self(id)
     }
 }

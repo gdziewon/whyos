@@ -10,7 +10,6 @@ pub const STACK_PAINT: u32 = 0xFEEDFACE;
 
 pub type TaskEntryPoint = extern "C" fn(usize);
 
-// TODO: IMPLEMENT Stack struct
 
 pub struct Stack {
     mem: MemChunk,

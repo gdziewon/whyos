@@ -69,7 +69,7 @@ pub fn suspend(tid: TaskId) -> WhyResult<()> {
         task.state = TaskState::Suspended(ctx);
 
         kernel.ready.remove(tid);
-        kernel.sleeping.remove(tid);
+        kernel.sleeping.remove(tid); // todo: for sure?
 
         Ok(tid == current)
     })?;
