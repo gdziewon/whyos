@@ -12,52 +12,95 @@ pub type TaskEntryPoint = extern "C" fn(usize);
 
 // TODO: IMPLEMENT Stack struct
 
-pub unsafe fn init_stack(
-    stack: &MemChunk,
-    entry_point: TaskEntryPoint,
-    arg: usize,
-    return_handler: usize
-) -> usize {
-    // painting for usage calculation
-    let stack_u32 = stack.ptr() as *mut u32;
-    let paint_count = stack.size() / size_of::<u32>();
-    for i in 0..paint_count {
-        unsafe { ptr::write_volatile(stack_u32.add(i), STACK_PAINT) };
-    }
-
-    let stack_top = unsafe { stack.ptr().add(stack.size()) };
-
-    let init_frame = InitStackFrame::new(entry_point as usize, arg, return_handler);
-
-    let frame_ptr =
-        (stack_top as usize - mem::size_of::<InitStackFrame>())
-        as *mut InitStackFrame;
-
-    unsafe { ptr::write(frame_ptr, init_frame); }
-
-    unsafe { *stack_u32 = STACK_CANARY; } // for stack overflow protection
-
-    frame_ptr as usize
+pub struct Stack {
+    mem: MemChunk,
+    sp: usize,
 }
 
-pub fn calculate_stack_usage(mem: &MemChunk) -> usize {
-    let ptr = mem.ptr() as *const u32;
-    let count = mem.size() / core::mem::size_of::<u32>();
+impl Stack {
+    pub fn init(
+        mem: MemChunk,
+        entry: TaskEntryPoint,
+        arg: usize,
+        ret: usize
+    ) -> Self {
+        // painting for usage calculation
+        let stack_u32 = mem.ptr() as *mut u32;
+        let paint_count = mem.size() / size_of::<u32>();
+        for i in 0..paint_count {
+            unsafe { ptr::write_volatile(stack_u32.add(i), STACK_PAINT) };
+        }
 
-    // start at 1 to skip canary
-    for i in 1..count {
-        let val = unsafe { ptr::read_volatile(ptr.add(i)) };
+        let stack_top = unsafe { mem.ptr().add(mem.size()) };
 
-        // found a word that's not paint, we hit the used portion of a stack
-        if val != STACK_PAINT {
-            let unused_words = i;
-            let used_bytes = mem.size() - (unused_words * 4);
-            return used_bytes;
+        let init_frame = InitStackFrame::new(entry as usize, arg, ret);
+
+        let frame_ptr =
+            (stack_top as usize - mem::size_of::<InitStackFrame>())
+            as *mut InitStackFrame;
+
+        unsafe { ptr::write(frame_ptr, init_frame); }
+
+        unsafe { *stack_u32 = STACK_CANARY; } // for stack overflow protection
+
+        Self {
+            mem,
+            sp: frame_ptr as usize
         }
     }
 
-    // stack completly full or corrupted
-    mem.size()
+    #[inline]
+    pub fn sp(&self) -> usize {
+        self.sp
+    }
+
+    #[inline]
+    pub fn set_sp(&mut self, sp: usize) {
+        self.sp = sp
+    }
+
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.mem.size()
+    }
+
+    #[inline]
+    pub fn base(&self) -> *const u8 {
+        self.mem.ptr()
+    }
+
+    #[inline]
+    pub fn into_chunk(self) -> MemChunk {
+        self.mem
+    }
+
+    /// Returns amount of used words
+    pub fn usage(&self) -> usize {
+        let ptr = self.mem.ptr() as *const u32;
+        let count = self.mem.size() / core::mem::size_of::<u32>();
+
+        // start at 1 to skip canary
+        for i in 1..count {
+            let val = unsafe { ptr::read_volatile(ptr.add(i)) };
+
+            // found a word that's not paint, we hit the used portion of a stack
+            if val != STACK_PAINT {
+                let unused_words = i;
+                let used_bytes = self.mem.size() - (unused_words * 4);
+                return used_bytes;
+            }
+        }
+
+        // stack completly full or corrupted
+        self.mem.size()
+    }
+
+    #[inline]
+    pub fn check_canary(&self) -> bool {
+        unsafe {
+            core::ptr::read_volatile(self.mem.ptr() as *const u32) == STACK_CANARY
+        }
+    }
 }
 
 #[repr(C)]

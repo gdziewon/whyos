@@ -12,7 +12,7 @@ pub use builder::{TaskBuilder, TaskRoutine, TaskRoutineArg, StackSize};
 pub use id::TaskId;
 pub use info::TaskInfo;
 pub use map::TaskMap;
-pub use stack::{init_stack, calculate_stack_usage, TaskEntryPoint, STACK_CANARY};
+pub use stack::{Stack, TaskEntryPoint};
 pub use state::{TaskState, ResumeContext};
 pub use table::TaskTable;
 pub use tcb::Tcb;

@@ -1,5 +1,5 @@
 use crate::scheduler::{self, KERNEL, IDLE_TID};
-use crate::task::{self, TaskId, TaskState, Tcb};
+use crate::task::{self, Stack, TaskId, TaskState, Tcb};
 use crate::error::{WhyError, WhyResult};
 use crate::memory;
 
@@ -17,7 +17,7 @@ pub fn spawn(
     priority: u8,
     stack_size: usize
 ) -> WhyResult<TaskId> {
-    let stack = match memory::alloc(stack_size) {
+    let mem = match memory::alloc(stack_size) {
         Some(mem) => mem,
         None => {
             reap_zombies();
@@ -25,14 +25,8 @@ pub fn spawn(
         }
     };
 
-    let sp = unsafe {
-        task::init_stack(
-            &stack,
-            entry,
-            arg,
-            task_exit_trampoline as *const () as usize
-        )
-    };
+    let ret = task_exit_trampoline as *const () as usize;
+    let stack = Stack::init(mem, entry, arg, ret);
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
@@ -42,7 +36,7 @@ pub fn spawn(
 
         kernel.allocated.add(tid);
         kernel.ready.add(tid);
-        kernel.tasks[tid] = Tcb::ready(name, sp, priority, stack);
+        kernel.tasks[tid] = Tcb::ready(name, priority, stack);
         Ok(tid)
     })
 }
@@ -79,7 +73,7 @@ pub fn reap_zombies() -> usize {
 
                 kernel.tasks[tid] = Tcb::dead();
 
-                unsafe { memory::dealloc(stack); }
+                unsafe { memory::dealloc(stack.into_chunk()); }
             }
         }
     });
@@ -95,24 +89,17 @@ pub fn init_idle_task() { // idle task is ran when every other task can't
         }
     }
 
-    let stack = match memory::alloc(IDLE_STACK_SIZE) {
+    let mem = match memory::alloc(IDLE_STACK_SIZE) {
         Some(mem) => mem,
         None => panic!("WhyOS: Couldn't allocate Idle Task")
     };
 
 
     let return_handler = task_exit_trampoline as *const () as usize;
-    let sp = unsafe {
-        task::init_stack(
-            &stack,
-            idle_task,
-            0,
-            return_handler
-        )
-    };
+    let stack = Stack::init(mem, idle_task, 0, return_handler);
 
     critical_section::with(|cs| {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        kernel.tasks[IDLE_TID] = Tcb::ready(Some("idle"), sp, u8::MAX, stack);
+        kernel.tasks[IDLE_TID] = Tcb::ready(Some("idle"), u8::MAX, stack);
     });
 }

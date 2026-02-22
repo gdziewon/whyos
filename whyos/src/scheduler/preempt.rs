@@ -2,7 +2,7 @@ use core::arch::naked_asm;
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 
-use crate::{task::{STACK_CANARY, TaskState}};
+use crate::TaskState;
 use super::{KERNEL, IDLE_TID, MAX_TASKS};
 
 
@@ -10,7 +10,9 @@ use super::{KERNEL, IDLE_TID, MAX_TASKS};
 extern "C" fn get_idle_task_sp() -> usize {
     critical_section::with(|cs| {
         let kernel = KERNEL.borrow(cs).borrow();
-        kernel.tasks[IDLE_TID].sp
+
+        // TODO: make absolute sure its safe here
+        unsafe { kernel.tasks[IDLE_TID].stack.as_ref().unwrap_unchecked().sp() }
     })
 }
 
@@ -20,21 +22,21 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
         let mut kernel = KERNEL.borrow(cs).borrow_mut();
         let current = kernel.current_task;
 
-        if kernel.tasks[current].state != TaskState::Dead {
-            // FIXME: looks digusting now I know
-            let canary_val = unsafe { *(kernel.tasks[current].stack.as_ref().unwrap().ptr() as *const u32)};
-            if canary_val != STACK_CANARY {
+        if let Some(stack) = kernel.tasks[current].stack.as_mut() {
+            if !stack.check_canary() {
                 panic!("KERNEL PANIC: Stack Overflow detected in Task {}", current.id());
             }
+
+            stack.set_sp(old_sp);
         }
 
-        kernel.tasks[current].sp = old_sp;
+        // to not overwrite Blocked etc
         if kernel.tasks[current].state == TaskState::Running {
             kernel.tasks[current].state = TaskState::Ready;
         }
 
         // start searching from (current + 1) for round robin
-        let next = (current.id() + 1) & (MAX_TASKS - 1); // bitwise and instead of modulo, MAX_TASKS is a power of two
+        let next = (current.id() + 1) % MAX_TASKS;
 
         let best_task = kernel.ready
             .iter_from(next)
@@ -43,7 +45,12 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
 
         kernel.current_task = best_task;
         kernel.tasks[best_task].state = TaskState::Running;
-        kernel.tasks[best_task].sp
+
+        // TODO: MAKE ABSOLUTE SURE IF THIS IS SAFE
+        // Should be safe, task in ready array mustn't be dead
+        unsafe {
+            kernel.tasks[best_task].stack.as_ref().unwrap_unchecked().sp()
+        }
     })
 }
 

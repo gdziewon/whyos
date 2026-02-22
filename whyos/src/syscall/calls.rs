@@ -1,5 +1,5 @@
 use crate::scheduler::{self, KERNEL, IDLE_TID};
-use crate::task::{ResumeContext, TaskId, TaskInfo, TaskMap, TaskState, ops, calculate_stack_usage};
+use crate::task::{ResumeContext, TaskId, TaskInfo, TaskMap, TaskState, ops};
 use crate::error::{WhyError, WhyResult};
 
 #[inline]
@@ -143,10 +143,10 @@ pub fn get_task_info(tid: TaskId) -> WhyResult<TaskInfo> {
                 name: task.name,
                 state: task.state,
                 priority: task.priority,
-                current_sp: task.sp,
-                stack_base: stack.ptr() as usize,
+                current_sp: stack.sp(),
+                stack_base: stack.base() as usize,
                 stack_size: stack.size(),
-                max_stack_usage: calculate_stack_usage(&stack),
+                max_stack_usage: stack.usage(),
             })
         } else {
             Err(WhyError::InternalError) // FIXME: add more errors
