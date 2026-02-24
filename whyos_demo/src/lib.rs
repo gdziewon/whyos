@@ -22,12 +22,14 @@ pub fn halt() -> ! {
 macro_rules! check {
     ($cond:expr) => {
         if !($cond) {
-            return Err(concat!("Assertion failed: ", stringify!($cond), " | ", file!(), ":", line!()));
+            defmt::error!("Assertion failed: {} | {}:{}", stringify!($cond), file!(), line!());
+            return Err("Assertion failed");
         }
     };
-    ($cond:expr, $msg:expr) => {
+    ($cond:expr, $($arg:tt)+) => {
         if !($cond) {
-            return Err($msg);
+            defmt::error!($($arg)+);
+            return Err("Assertion failed");
         }
     };
 }
@@ -60,7 +62,7 @@ macro_rules! harness {
         }
 
         extern "C" fn runner() {
-            defmt::info!("TEST SUITE: {}", file!());
+            defmt::info!(" TEST SUITE: {}", file!());
 
             let mut any_failed = false;
             $(

@@ -28,7 +28,7 @@ fn test_saturation() -> TestResult {
         }
     }
 
-    whyos::sleep(200);
+    whyos::sleep(50);
 
     let active = ACTIVE_COUNT.load(Ordering::Relaxed);
 
@@ -55,7 +55,8 @@ fn test_starvation() -> TestResult {
     let low_cnt = COUNTER_A.load(Ordering::Relaxed);
     let high_cnt = COUNTER_B.load(Ordering::Relaxed);
 
-    check!(high_cnt > 240, "High priority task didn't run enough");
+    defmt::info!("high_cnt {}", high_cnt);
+    check!(high_cnt > 4250, "High priority task didn't run enough"); // it's also for me, to know if performence is degrading
     check!(low_cnt == 0, "Low priority task ran! Scheduler failed strict preemption");
     STOP_FLAG.store(true, Ordering::Relaxed);
     Ok(())
@@ -84,7 +85,7 @@ fn test_fairness() -> TestResult {
     whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_C).priority(10).spawn().unwrap();
     whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_D).priority(10).spawn().unwrap();
 
-    whyos::sleep(500);
+    whyos::sleep(100);
 
     let a = COUNTER_A.load(Ordering::Relaxed);
     let b = COUNTER_B.load(Ordering::Relaxed);
@@ -94,6 +95,7 @@ fn test_fairness() -> TestResult {
     let min = a.min(b).min(c).min(d);
     let max = a.max(b).max(c).max(d);
 
+    defmt::info!("a: {}, b: {}, c: {}, d: {}", a, b, c, d);
     check!(min > 0, "One or more tasks starved");
     check!(max < min * 2, "Unfair scheduling");
 

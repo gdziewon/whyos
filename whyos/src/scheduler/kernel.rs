@@ -38,7 +38,7 @@ impl Kernel {
     pub fn sleeping(&self) -> TaskMap { self.sleeping }
     pub fn zombies(&self) -> TaskMap { self.zombies }
 
-    // TODO: add one, central state change function
+    // TODO: add one, central state change function, add checks on each state change, possibly TaskRegistry struct with bitmaps
     //fn set_task_state(&mut self, tid: TaskId, new_state: TaskState) {}
 
     pub fn tick(&mut self) -> u64 {

@@ -19,7 +19,7 @@ fn test_mutex_priority() -> TestResult {
     whyos::TaskBuilder::new(waiter_high).priority(4).spawn().unwrap();
     whyos::TaskBuilder::new(waiter_low).priority(6).spawn().unwrap();
 
-    whyos::sleep(200);
+    whyos::sleep(20);
 
     // 1 (h) -> 2 (m) -> 3 (l) -> 123
     check!(*(MUTEX_PRIO.lock()) == 123, "tasks went in wrong order");
@@ -29,7 +29,7 @@ fn test_mutex_priority() -> TestResult {
 
 extern "C" fn holder() {
     let _g = MUTEX_PRIO.lock();
-    whyos::sleep(50);
+    whyos::sleep(10);
 }
 
 extern "C" fn waiter_high() {
@@ -47,6 +47,23 @@ extern "C" fn waiter_low() {
     *g = *g * 10 + 3;
 }
 
+static EXIT_MUTEX: whyos::Mutex<u32> = whyos::Mutex::new(0);
+
+#[allow(dead_code)] // FIXME: fails, but this will work once I move mutexes onto Kernel
+fn test_exit_with_mutex() -> TestResult {
+    whyos::spawn_with_priority(exit_holder, 5).unwrap();
+    whyos::sleep(10);
+
+    let g = EXIT_MUTEX.try_lock();
+    check!(g.is_some(), "Mutex was not released when task exited");
+
+    Ok(())
+}
+
+extern "C" fn exit_holder() {
+    let _g = EXIT_MUTEX.lock();
+    unsafe { whyos::exit() };
+}
 
 static SEM_COUNT: Semaphore = Semaphore::new(0, 3);
 static CONS_FINISHED: AtomicBool = AtomicBool::new(false);
@@ -118,7 +135,7 @@ static MUTEX_STRESS: Mutex<u32> = Mutex::new(0);
 
 fn test_mutex_stress() -> TestResult {
     for _ in 0..4 {
-        whyos::TaskBuilder::new(t5_worker).priority(5).spawn().unwrap();
+        whyos::TaskBuilder::new(stress_worker).priority(5).spawn().unwrap();
     }
 
     whyos::sleep(500);
@@ -129,7 +146,7 @@ fn test_mutex_stress() -> TestResult {
     Ok(())
 }
 
-extern "C" fn t5_worker() {
+extern "C" fn stress_worker() {
     for _ in 0..100 {
         let mut g = MUTEX_STRESS.lock();
         *g += 1;
@@ -139,6 +156,7 @@ extern "C" fn t5_worker() {
 
 harness! {
     test_mutex_priority,
+//    test_exit_with_mutex,
     test_semaphore_blocking,
     test_queue_try_send,
     test_queue_wrap,

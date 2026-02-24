@@ -12,6 +12,7 @@ pub use itc::{Mutex, Queue, Semaphore};
 pub use task::{TaskId, TaskBuilder, TaskInfo, StackSize};
 pub use task::{TaskRoutine, TaskRoutineArg, TaskState, ResumeContext};
 pub use scheduler::MAX_TASKS;
+pub use error::WhyError;
 
 use core::arch::asm;
 use core::mem::MaybeUninit;
@@ -64,8 +65,14 @@ pub fn sleep(ticks: u64) {
     }
 }
 
+/// TODO: make it safe once mutexes are on kernel
+/// # Safety
+/// Calling this function will immediately terminate the task and reclaim its memory
+/// however it will NOT run any "Drop" implementations for variables currently in scope
+///
+/// To ensure everything gets cleaned up, tasks should simply return from their entry point
 #[inline]
-pub fn exit() -> ! {
+pub unsafe fn exit() -> ! {
     unsafe {
         asm!(
             "svc {ID}",
