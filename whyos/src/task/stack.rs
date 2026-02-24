@@ -68,11 +68,6 @@ impl Stack {
         self.mem.ptr()
     }
 
-    #[inline]
-    pub fn into_chunk(self) -> MemChunk {
-        self.mem
-    }
-
     /// Returns amount of used words
     pub fn usage(&self) -> usize {
         let ptr = self.mem.ptr() as *const u32;

@@ -6,32 +6,51 @@ pub use mutex::Mutex;
 pub use queue::Queue;
 pub use sem::Semaphore;
 
-use crate::{TaskId, scheduler, task::TaskMap};
+use crate::{TaskState, scheduler::Kernel, task::TaskMap};
 
-fn pop_highest_prio_tid(list: &mut TaskMap) -> Option<TaskId> {
-    if list.is_empty() {
-        return None;
+// TODO: ADD SYSCALLS FOR ITC!!!!!
+
+#[repr(transparent)]
+struct WaitQueue {
+    waiting: TaskMap
+}
+
+impl WaitQueue {
+    pub const fn new() -> Self {
+        Self { waiting: TaskMap::new() }
     }
 
-    let mut best_task = None;
-    let mut best_prio = u8::MAX;
-
-    for tid in list.iter() {
-        if scheduler::is_task_suspended(tid) {
-            continue;
-        }
-
-        let prio = scheduler::get_task_priority(tid);
-        if prio < best_prio {
-            best_prio = prio;
-            best_task = Some(tid);
-        }
+    pub fn block_current(&mut self) {
+        Kernel::lock(|k| {
+            let curr = k.current_task();
+            self.waiting.add(curr);
+            k.block_task(curr);
+        })
     }
 
-    if let Some(tid) = best_task {
-        list.remove(tid);
-        best_task
-    } else {
-        None
+    pub fn remove_current(&mut self) {
+        Kernel::lock(|k| {
+            let curr = k.current_task();
+            self.waiting.remove(curr);
+        })
+    }
+
+    // returns true if it woke up someone
+    pub fn wake_highest_prio(&mut self) -> bool {
+        Kernel::lock(|k| {
+
+            let best_task = self.waiting
+                .iter()
+                .filter(|&tid| k.task(tid).state == TaskState::Blocked) // only wake tasks that are actually blocked (to avoid lost wakeup problem)
+                .min_by_key(|&tid| k.task(tid).priority);
+
+            if let Some(tid) = best_task {
+                self.waiting.remove(tid);
+                k.unblock_task(tid);
+                true
+            } else {
+                false
+            }
+        })
     }
 }

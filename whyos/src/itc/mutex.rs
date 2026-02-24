@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, ops::{Deref, DerefMut}};
 use critical_section::Mutex as CSMutex;
 
-use crate::{TaskId, itc::pop_highest_prio_tid, scheduler, task::TaskMap};
+use crate::{itc::WaitQueue, scheduler};
 
 pub struct Mutex<T> {
     data: UnsafeCell<T>,
@@ -10,16 +10,14 @@ pub struct Mutex<T> {
 
 struct MutexState {
     locked: bool,
-    owner: Option<TaskId>,
-    waiting: TaskMap
+    waiting: WaitQueue
 }
 
 impl MutexState {
     const fn new() -> Self {
         Self {
             locked: false,
-            owner: None,
-            waiting: TaskMap::new()
+            waiting: WaitQueue::new()
         }
     }
 }
@@ -66,19 +64,16 @@ impl<T> Mutex<T> {
         // loop is needed since if the acquisition fails, task should check from the start
         loop {
             let acquired = critical_section::with(|cs| {
-                let mut state = self.state.borrow(cs).borrow_mut();
-                let curr_tid = scheduler::get_current_tid();
+                let mut state = self.state.borrow_ref_mut(cs);
 
                 if !state.locked { // success
                     state.locked = true;
-                    state.owner = Some(curr_tid);
 
-                    state.waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
+                    state.waiting.remove_current(); // needed for weird stuff with suspend/resume FIXME
                     true
 
                 } else { // we have to wait
-                    state.waiting.add(curr_tid);
-                    scheduler::block_current_task();
+                    state.waiting.block_current();
                     false
                 }
             });
@@ -94,12 +89,10 @@ impl<T> Mutex<T> {
     #[inline]
     pub fn try_lock(&self) -> Option<MutexGuard<'_, T>> {
         critical_section::with(|cs| {
-            let mut state = self.state.borrow(cs).borrow_mut();
+            let mut state = self.state.borrow_ref_mut(cs);
 
             if !state.locked {
-                let curr_tid = scheduler::get_current_tid();
                 state.locked = true;
-                state.owner = Some(curr_tid);
                 Some(MutexGuard { lock: self })
             } else {
                 None
@@ -116,17 +109,11 @@ impl<T> Mutex<T> {
 
     fn release(&self) {
         let someone_waiting = critical_section::with(|cs| {
-            let mut state = self.state.borrow(cs).borrow_mut();
+            let mut state = self.state.borrow_ref_mut(cs);
 
             state.locked = false;
-            state.owner = None;
 
-            if let Some(tid) = pop_highest_prio_tid(&mut state.waiting) {
-                scheduler::wake_task(tid);
-                true
-            } else {
-                false
-            }
+            state.waiting.wake_highest_prio()
         });
 
         // we might've woke someone with bigger priority, if not then scheduler will let us continue anyway

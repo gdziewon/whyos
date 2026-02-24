@@ -25,7 +25,7 @@ use crate::task::TaskMap;
 /// # Safety
 /// Should only be called once by "main"
 pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! { // todo: disable interrupts here?
-    task::ops::init_idle_task();
+    task::ops::init_idle_task(); // todo: they shouldn't be called here, but after the svc call
     scheduler::config_systick(syst, freq);
 
     unsafe {

@@ -2,56 +2,21 @@ use core::arch::naked_asm;
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 
-use crate::TaskState;
-use super::{KERNEL, IDLE_TID, MAX_TASKS};
-
+use crate::scheduler::{Kernel, IDLE_TID};
 
 #[unsafe(no_mangle)]
 extern "C" fn get_idle_task_sp() -> usize {
-    critical_section::with(|cs| {
-        let kernel = KERNEL.borrow(cs).borrow();
-
+    Kernel::lock(|k|
         // TODO: make absolute sure its safe here
-        unsafe { kernel.tasks[IDLE_TID].stack.as_ref().unwrap_unchecked().sp() }
-    })
+        unsafe {
+            k.task(IDLE_TID).stack.as_ref().unwrap_unchecked().sp()
+        }
+    )
 }
 
 #[unsafe(no_mangle)]
 extern "C" fn switch_task(old_sp: usize) -> usize {
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        let current = kernel.current_task;
-
-        if let Some(stack) = kernel.tasks[current].stack.as_mut() {
-            if !stack.check_canary() {
-                panic!("KERNEL PANIC: Stack Overflow detected in Task {}", current.id());
-            }
-
-            stack.set_sp(old_sp);
-        }
-
-        // to not overwrite Blocked etc
-        if kernel.tasks[current].state == TaskState::Running {
-            kernel.tasks[current].state = TaskState::Ready;
-        }
-
-        // start searching from (current + 1) for round robin
-        let next = (current.id() + 1) % MAX_TASKS;
-
-        let best_task = kernel.ready
-            .iter_from(next)
-            .min_by_key(|&tid| kernel.tasks[tid].priority)
-            .unwrap_or(IDLE_TID); // fallback to IDLE
-
-        kernel.current_task = best_task;
-        kernel.tasks[best_task].state = TaskState::Running;
-
-        // TODO: MAKE ABSOLUTE SURE IF THIS IS SAFE
-        // Should be safe, task in ready array mustn't be dead
-        unsafe {
-            kernel.tasks[best_task].stack.as_ref().unwrap_unchecked().sp()
-        }
-    })
+    Kernel::lock(|k| k.schedule(old_sp))
 }
 
 #[unsafe(no_mangle)]
@@ -100,36 +65,22 @@ pub unsafe extern "C" fn PendSV() {
 
 #[exception]
 fn SysTick() {
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-
-        kernel.system_ticks += 1;
-        let now = kernel.system_ticks;
+    Kernel::lock(|k| {
+        let now = k.tick();
 
         // wake up sleeping tasks
-        for tid in kernel.sleeping.iter() {
-            let task = &mut kernel.tasks[tid];
-
+        for tid in k.sleeping().iter() {
+            let task = k.task(tid);
             if task.wakeup_time <= now {
-                task.state = TaskState::Ready;
-
-                kernel.sleeping.remove(tid);
-                kernel.ready.add(tid);
+                k.wake_task(tid);
             }
         }
 
         // software watchdog monitoring - ONLY FOR READY TASKS
-        for tid in kernel.ready.iter() {
-            let task = &mut kernel.tasks[tid];
-
-            if let Some(bowl) = task.watchdog_remaining_ticks.as_mut() {
-                if *bowl == 0 {
-                    panic!("Task {} ({}) didn't feed the watchdog for {}",
-                        tid.id(), task.name.unwrap_or("'no name'"), task.watchdog_interval_ticks);
-                }
-                *bowl -= 1;
-            }
+        for tid in k.ready().iter() {
+            k.watchdog_check(tid);
         }
     });
+
     SCB::set_pendsv(); // handle switch in PendSV
 }

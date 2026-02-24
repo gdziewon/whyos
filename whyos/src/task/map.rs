@@ -25,11 +25,6 @@ impl TaskMap {
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    #[inline]
     pub fn is_set(&self, tid: TaskId) -> bool {
         self.0.is_set(tid.id())
     }

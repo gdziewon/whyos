@@ -2,6 +2,7 @@ use crate::task::Stack;
 
 use super::TaskState;
 
+// TODO: make these fields private?
 pub struct Tcb { // task control block
     pub name: Option<&'static str>,
     pub state: TaskState,

@@ -1,12 +1,12 @@
-use crate::scheduler::{self, KERNEL, IDLE_TID};
-use crate::task::{self, Stack, TaskId, TaskState, Tcb};
+use crate::scheduler::{self, Kernel, IDLE_TID};
+use crate::task::{self, Stack, TaskId};
 use crate::error::{WhyError, WhyResult};
 use crate::memory;
 
-const IDLE_STACK_SIZE: usize = 4096; // todo: might be too much
+const IDLE_STACK_SIZE: usize = 1024;
 
 extern "C" fn task_exit_trampoline() -> ! {
-    remove_task();
+    kill_current_task();
     panic!()
 }
 
@@ -28,30 +28,14 @@ pub fn spawn(
     let ret = task_exit_trampoline as *const () as usize;
     let stack = Stack::init(mem, entry, arg, ret);
 
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-
-        // FIXME: do sth about it in next commit
-        let tid = kernel.allocated.first_free()
-            .ok_or(WhyError::OutOfMemory)?; // todo: more errors, here MAXTASKSREACHED or sth
-
-        kernel.allocated.add(tid);
-        kernel.ready.add(tid);
-        kernel.tasks[tid] = Tcb::ready(name, priority, stack);
-        Ok(tid)
+    Kernel::lock(|k| {
+        k.spawn_task(name, priority, stack)
     })
 }
 
-pub fn remove_task() {
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        let current = kernel.current_task;
-
-        kernel.ready.remove(current);
-        kernel.sleeping.remove(current); // just in case, it should be impossible
-
-        kernel.zombies.add(current);
-        kernel.tasks[current].state = TaskState::Zombie;
+pub fn kill_current_task() {
+    Kernel::lock(|k| {
+        k.make_zombie(k.current_task());
     });
 
     scheduler::yield_now();
@@ -60,21 +44,11 @@ pub fn remove_task() {
 pub fn reap_zombies() -> usize {
     let mut reaped_size = 0;
 
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-
-        for tid in kernel.zombies.iter() {
-            let task = &mut kernel.tasks[tid];
-
-            if let Some(stack) = task.stack.take() {
+    Kernel::lock(|k| {
+        for tid in k.zombies().iter() {
+            if let Some(stack) = k.remove_zombie(tid) {
                 reaped_size += stack.size();
-
-                kernel.zombies.remove(tid);
-                kernel.allocated.remove(tid);
-
-                kernel.tasks[tid] = Tcb::dead();
-
-                memory::dealloc(stack.into_chunk());
+                // here stack goes out of scope MemChunk automatically should be cleared
             }
         }
     });
@@ -95,12 +69,10 @@ pub fn init_idle_task() { // idle task is ran when every other task can't
         None => panic!("WhyOS: Couldn't allocate Idle Task")
     };
 
-
     let return_handler = task_exit_trampoline as *const () as usize;
     let stack = Stack::init(mem, idle_task, 0, return_handler);
 
-    critical_section::with(|cs| {
-        let mut kernel = KERNEL.borrow(cs).borrow_mut();
-        kernel.tasks[IDLE_TID] = Tcb::ready(Some("idle"), u8::MAX, stack);
+    Kernel::lock(|k| {
+        k.init_task(IDLE_TID, Some("idle"), u8::MAX, stack);
     });
 }

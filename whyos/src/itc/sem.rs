@@ -2,7 +2,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex as CSMutex;
 
-use crate::{task::TaskMap, scheduler, itc::pop_highest_prio_tid};
+use crate::{scheduler, itc::WaitQueue};
 
 pub struct Semaphore {
     state: CSMutex<RefCell<SemState>>
@@ -11,7 +11,7 @@ pub struct Semaphore {
 struct SemState {
     permits: usize,
     capacity: usize,
-    waiting: TaskMap
+    waiting: WaitQueue
 }
 
 unsafe impl Sync for Semaphore {}
@@ -21,7 +21,7 @@ impl SemState {
         Self {
             permits: init_permits,
             capacity,
-            waiting: TaskMap::new()
+            waiting: WaitQueue::new()
         }
     }
 }
@@ -45,16 +45,14 @@ impl Semaphore {
         loop {
             // yield if there are no permits
             let acquired = critical_section::with(|cs| {
-                let mut state = self.state.borrow(cs).borrow_mut();
+                let mut state = self.state.borrow_ref_mut(cs);
 
-                let curr_tid = scheduler::get_current_tid();
                 if state.permits > 0 { // some permits left
                     state.permits -= 1;
-                    state.waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
+                    state.waiting.remove_current(); // needed for weird stuff with suspend/resume FIXME
                     true
                 } else { // NO PERMITS
-                    state.waiting.add(curr_tid);
-                    scheduler::block_current_task();
+                    state.waiting.block_current();
                     false
                 }
             });
@@ -70,7 +68,7 @@ impl Semaphore {
     #[inline]
     pub fn try_wait(&self) -> bool {
         critical_section::with(|cs| {
-            let mut state = self.state.borrow(cs).borrow_mut();
+            let mut state = self.state.borrow_ref_mut(cs);
 
             if state.permits > 0 {
                 state.permits -= 1;
@@ -84,18 +82,13 @@ impl Semaphore {
     pub fn signal(&self) {
         // yield if we woke someone
         let someone_waiting = critical_section::with(|cs| {
-            let mut state = self.state.borrow(cs).borrow_mut();
+            let mut state = self.state.borrow_ref_mut(cs);
 
             if state.permits < state.capacity {
                 state.permits += 1;
             }
 
-            if let Some(tid) = pop_highest_prio_tid(&mut state.waiting) {
-                scheduler::wake_task(tid);
-                true
-            } else {
-                false
-            }
+            state.waiting.wake_highest_prio()
         });
 
         if someone_waiting {
@@ -106,7 +99,7 @@ impl Semaphore {
     #[inline]
     pub fn available(&self) -> usize {
         critical_section::with(|cs| {
-            self.state.borrow(cs).borrow().permits
+            self.state.borrow_ref(cs).permits
         })
     }
 }

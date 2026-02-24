@@ -1,7 +1,7 @@
 use core::{cell::{RefCell, UnsafeCell}, mem::MaybeUninit};
 use critical_section::Mutex as CSMutex;
 
-use crate::{task::TaskMap, scheduler, itc::pop_highest_prio_tid};
+use crate::{scheduler, itc::WaitQueue};
 
 pub struct Queue<T, const N: usize> {
     data: UnsafeCell<MaybeUninit<[T; N]>>,
@@ -12,8 +12,8 @@ struct QueueState {
     count: usize,
     write_idx: usize,
     read_idx: usize,
-    prod_waiting: TaskMap,
-    cons_waiting: TaskMap
+    prod_waiting: WaitQueue,
+    cons_waiting: WaitQueue
 }
 
 impl QueueState {
@@ -22,8 +22,8 @@ impl QueueState {
             count: 0,
             write_idx: 0,
             read_idx: 0,
-            prod_waiting: TaskMap::new(),
-            cons_waiting: TaskMap::new()
+            prod_waiting: WaitQueue::new(),
+            cons_waiting: WaitQueue::new()
         }
     }
 }
@@ -44,12 +44,10 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         loop {
             // yield if we woke someone or item was not sent
             let should_yield = critical_section::with(|cs| {
-                let mut state = self.state.borrow(cs).borrow_mut();
+                let mut state = self.state.borrow_ref_mut(cs);
 
-                let curr_tid = scheduler::get_current_tid();
                 if state.count == CAPACITY { // queue is full, cant send
-                    scheduler::block_current_task();
-                    state.prod_waiting.add(curr_tid);
+                    state.prod_waiting.block_current();
                     true
 
                 } else {
@@ -66,14 +64,9 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                     state.write_idx = (state.write_idx + 1) % CAPACITY;
                     state.count += 1;
 
-                    state.prod_waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
+                    state.prod_waiting.remove_current(); // needed for weird stuff with suspend/resume FIXME
 
-                    if let Some(tid) = pop_highest_prio_tid(&mut state.cons_waiting) {
-                        scheduler::wake_task(tid);
-                        true
-                    } else {
-                        false
-                    }
+                    state.cons_waiting.wake_highest_prio()
                 }
             });
 
@@ -92,7 +85,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
     #[inline]
     pub fn try_send(&self, item: T) -> Result<(), T> { // we are returning the item in Err(T) if try_send failed
         critical_section::with(|cs| {
-            let mut state = self.state.borrow(cs).borrow_mut();
+            let mut state = self.state.borrow_ref_mut(cs);
 
             if state.count == CAPACITY {
                 return Err(item); // full queue
@@ -107,10 +100,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             state.write_idx = (state.write_idx + 1) % CAPACITY;
             state.count += 1;
 
-            if let Some(tid) = pop_highest_prio_tid(&mut state.cons_waiting) {
-                scheduler::wake_task(tid);
-                // wont yield here, caller should do it manually if needed
-            }
+            state.cons_waiting.wake_highest_prio(); // wont yield here, caller should do it manually if needed
 
             Ok(())
         })
@@ -122,12 +112,10 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         loop {
             // yield if we woke someone
             let should_yield = critical_section::with(|cs| {
-                let mut state = self.state.borrow(cs).borrow_mut();
+                let mut state = self.state.borrow_ref_mut(cs);
 
-                let curr_tid = scheduler::get_current_tid();
                 if state.count == 0 { // no data to receive = block
-                    scheduler::block_current_task();
-                    state.cons_waiting.add(curr_tid);
+                    state.cons_waiting.block_current();
                     false
 
                 } else { // get data
@@ -142,14 +130,9 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                     state.read_idx = (state.read_idx + 1) % CAPACITY;
                     state.count -= 1;
 
-                    state.cons_waiting.remove(curr_tid); // needed for weird stuff with suspend/resume FIXME
+                    state.cons_waiting.remove_current(); // needed for weird stuff with suspend/resume FIXME
 
-                    if let Some(tid) = pop_highest_prio_tid(&mut state.prod_waiting) {
-                        scheduler::wake_task(tid);
-                        true
-                    } else {
-                        false
-                    }
+                    state.prod_waiting.wake_highest_prio()
                 }
             });
 
@@ -167,7 +150,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
     #[inline]
     pub fn try_receive(&self) -> Option<T> {
         critical_section::with(|cs| {
-            let mut state = self.state.borrow(cs).borrow_mut();
+            let mut state = self.state.borrow_ref_mut(cs);
 
             if state.count == 0 {
                 return None; // queue empty
@@ -182,10 +165,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             state.read_idx = (state.read_idx + 1) % CAPACITY;
             state.count -= 1;
 
-            if let Some(tid) = pop_highest_prio_tid(&mut state.prod_waiting) {
-                scheduler::wake_task(tid);
-                // wont yield here, caller should do it manually if needed
-            }
+            state.prod_waiting.wake_highest_prio(); // wont yield here, caller should do it manually if needed
 
             Some(val)
         })

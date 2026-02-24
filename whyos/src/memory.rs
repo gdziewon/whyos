@@ -68,7 +68,7 @@ pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
     })
 }
 
-pub fn dealloc(chunk: MemChunk) {
+fn dealloc(chunk: &mut MemChunk) {
     critical_section::with(|cs| {
         let pool = unsafe { &mut *MEMORY.borrow(cs).get() };
         let base_ptr = pool.buffer.as_mut_ptr() as *mut u8;
@@ -80,4 +80,10 @@ pub fn dealloc(chunk: MemChunk) {
 
         pool.bitmap.clear_range(start_bit, blocks);
     })
+}
+
+impl Drop for MemChunk {
+    fn drop(&mut self) {
+        dealloc(self);
+    }
 }
