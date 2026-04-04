@@ -22,7 +22,7 @@ impl WaitQueue {
 
     pub fn block_current(&mut self) {
         Kernel::lock(|k| {
-            let curr = k.current_task();
+            let curr = k.current_task().expect("WhyOS: idle cannot block on wait queues");
             self.waiting.add(curr);
             k.block_task(curr);
         })
@@ -30,8 +30,9 @@ impl WaitQueue {
 
     pub fn remove_current(&mut self) {
         Kernel::lock(|k| {
-            let curr = k.current_task();
-            self.waiting.remove(curr);
+            if let Some(curr) = k.current_task() {
+                self.waiting.remove(curr);
+            }
         })
     }
 

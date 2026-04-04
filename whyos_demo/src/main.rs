@@ -30,7 +30,6 @@ fn main() -> ! {
 
         whyos::TaskBuilder::with_static_mut(blinky_task, led_ref)
             .name("blinky")
-            .priority(128)
             .spawn()
             .expect("Failed to spawn blinky");
     }

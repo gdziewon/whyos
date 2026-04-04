@@ -21,7 +21,7 @@ impl TaskBuilder {
             entry,
             arg,
             priority: 128,
-            stack_size: StackSize::SMALL.0,
+            stack_size: StackSize::DEFAULT.0,
             name: None,
         }
     }

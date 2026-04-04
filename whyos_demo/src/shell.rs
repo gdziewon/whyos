@@ -73,21 +73,21 @@ pub fn init_shell(uart: Uart) {
 
 #[interrupt]
 fn UART0_IRQ() {
-    let mut guard = UART_RX.lock();
-
-    if let Some(rx) = guard.as_mut() {
-        loop {
-            match rx.read() {
-                Ok(byte) => {
-                    // data! push to queu
-                    let _ = SHELL_RX_QUEUE.try_send(byte);
-                }
-                Err(nb::Error::WouldBlock) => {
-                    // no more data
-                    break;
-                }
-                Err(_e) => {
-                    break; // hw error
+    if let Some(mut guard) = UART_RX.try_lock() {
+        if let Some(rx) = guard.as_mut() {
+            loop {
+                match rx.read() {
+                    Ok(byte) => {
+                        // data! push to queu
+                        let _ = SHELL_RX_QUEUE.try_send(byte);
+                    }
+                    Err(nb::Error::WouldBlock) => {
+                        // no more data
+                        break;
+                    }
+                    Err(_e) => {
+                        break; // hw error
+                    }
                 }
             }
         }

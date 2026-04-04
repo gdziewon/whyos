@@ -22,34 +22,61 @@ static MEMORY: Mutex<UnsafeCell<MemoryPool>> = Mutex::new(UnsafeCell::new(Memory
     bitmap: Bitmap::<u64>::new(),
 }));
 
-pub struct MemChunk {
+pub trait MemChunk {
+    fn ptr(&self) -> *mut u8;
+    fn size(&self) -> usize;
+}
+
+pub(crate) struct StaticMemory {
     ptr: *mut u8,
     size: usize,
 }
 
-impl MemChunk {
+impl StaticMemory {
     #[inline]
-    pub fn ptr(&self) -> *mut u8 { self.ptr }
-
-    #[inline]
-    pub fn size(&self) -> usize { self.size }
+    pub const unsafe fn from_raw(ptr: *mut u8, size: usize) -> Self {
+        Self { ptr, size }
+    }
 }
 
-unsafe impl Send for MemChunk {}
+impl MemChunk for StaticMemory {
+    #[inline]
+    fn ptr(&self) -> *mut u8 { self.ptr }
+
+    #[inline]
+    fn size(&self) -> usize { self.size }
+}
+
+unsafe impl Send for StaticMemory {}
+
+pub struct AllocatedMemory {
+    ptr: *mut u8,
+    size: usize,
+}
+
+impl MemChunk for AllocatedMemory {
+    #[inline]
+    fn ptr(&self) -> *mut u8 { self.ptr }
+
+    #[inline]
+    fn size(&self) -> usize { self.size }
+}
+
+impl Drop for AllocatedMemory {
+    fn drop(&mut self) {
+        dealloc(self);
+    }
+}
+
+unsafe impl Send for AllocatedMemory {}
 
 // rounds up the size to multiple of 1024 (kb)
-pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
+pub fn alloc(size: usize) -> Option<AllocatedMemory> { // todo: return a Result?
     let blocks = size.div_ceil(BLOCK_SIZE);
 
     if blocks == 0 || blocks > POOL_SIZE {
         return None; // todo: return result here?
     }
-
-    // let search_mask: u64 = if blocks == 64 {
-    //     u64::MAX // to handle edge case of 64 - shifting u64 by 64 is UB
-    // } else {
-    //     (1u64 << blocks) - 1 // for 3kb mask would be 0b111
-    // };
 
     critical_section::with(|cs| {
         let pool = unsafe {&mut *MEMORY.borrow(cs).get() };
@@ -62,13 +89,13 @@ pub fn alloc(size: usize) -> Option<MemChunk> { // todo: return a Result?
             let alloc_ptr = unsafe { base_ptr.add(start_offset) };
 
             let size = blocks * BLOCK_SIZE;
-            return Some(MemChunk { ptr: alloc_ptr, size});
+            return Some(AllocatedMemory { ptr: alloc_ptr, size});
         }
         None
     })
 }
 
-fn dealloc(chunk: &mut MemChunk) {
+fn dealloc(chunk: &mut AllocatedMemory) {
     critical_section::with(|cs| {
         let pool = unsafe { &mut *MEMORY.borrow(cs).get() };
         let base_ptr = pool.buffer.as_mut_ptr() as *mut u8;
@@ -80,10 +107,4 @@ fn dealloc(chunk: &mut MemChunk) {
 
         pool.bitmap.clear_range(start_bit, blocks);
     })
-}
-
-impl Drop for MemChunk {
-    fn drop(&mut self) {
-        dealloc(self);
-    }
 }

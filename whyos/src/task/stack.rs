@@ -1,6 +1,6 @@
-use core::{mem::{self, MaybeUninit}, ptr};
+use core::{mem::MaybeUninit, ptr};
 
-use crate::memory::MemChunk;
+use crate::memory::{AllocatedMemory, MemChunk};
 
 const EXC_RETURN_THREAD_PSP: u32 = 0xFFFFFFFD;
 const XPSR_THUMB: u32 = 0x01000000;
@@ -11,41 +11,34 @@ pub const STACK_PAINT: u32 = 0xFEEDFACE;
 pub type TaskEntryPoint = extern "C" fn(usize);
 
 
-pub struct Stack {
-    mem: MemChunk,
+pub struct Stack<M: MemChunk> {
+    mem: M,
     sp: usize,
 }
 
-impl Stack {
-    pub fn init(
-        mem: MemChunk,
-        entry: TaskEntryPoint,
-        arg: usize,
-        ret: usize
-    ) -> Self {
+unsafe impl<M: MemChunk + Send> Send for Stack<M> {}
+
+pub type TaskStack = Stack<AllocatedMemory>;
+
+impl<M: MemChunk> Stack<M> {
+    pub fn init(mem: M, entry: TaskEntryPoint, arg: usize, ret: usize) -> Self {
+        assert_eq!(mem.ptr() as usize % 8, 0, "WhyOS: stack memory must be 8-byte aligned");
+
         // painting for usage calculation
         let stack_u32 = mem.ptr() as *mut u32;
-        let paint_count = mem.size() / size_of::<u32>();
+        let paint_count = mem.size() / core::mem::size_of::<u32>();
         for i in 0..paint_count {
             unsafe { ptr::write_volatile(stack_u32.add(i), STACK_PAINT) };
         }
 
         let stack_top = unsafe { mem.ptr().add(mem.size()) };
-
         let init_frame = InitStackFrame::new(entry as usize, arg, ret);
-
-        let frame_ptr =
-            (stack_top as usize - mem::size_of::<InitStackFrame>())
-            as *mut InitStackFrame;
+        let frame_ptr = (stack_top as usize - core::mem::size_of::<InitStackFrame>()) as *mut InitStackFrame;
 
         unsafe { ptr::write(frame_ptr, init_frame); }
+        unsafe { *stack_u32 = STACK_CANARY; }
 
-        unsafe { *stack_u32 = STACK_CANARY; } // for stack overflow protection
-
-        Self {
-            mem,
-            sp: frame_ptr as usize
-        }
+        Self { mem, sp: frame_ptr as usize }
     }
 
     #[inline]

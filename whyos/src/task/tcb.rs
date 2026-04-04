@@ -1,4 +1,4 @@
-use crate::task::Stack;
+use crate::task::TaskStack;
 
 use super::TaskState;
 
@@ -8,13 +8,13 @@ pub struct Tcb { // task control block
     pub state: TaskState,
     pub priority: u8, // lower number = higher priority
     pub wakeup_time: u64,
-    pub stack: Option<Stack>,
+    pub stack: Option<TaskStack>,
     pub watchdog_remaining_ticks: Option<u64>,
     pub watchdog_interval_ticks: u64
 }
 
 impl Tcb {
-    pub const fn ready(name: Option<&'static str>, priority: u8, stack: Stack) -> Self {
+    pub const fn ready(name: Option<&'static str>, priority: u8, stack: TaskStack) -> Self {
         Self {
             name,
             state: TaskState::Ready,

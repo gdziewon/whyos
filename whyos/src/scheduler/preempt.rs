@@ -2,16 +2,11 @@ use core::arch::naked_asm;
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 
-use crate::scheduler::{Kernel, IDLE_TID};
+use crate::scheduler::Kernel;
 
 #[unsafe(no_mangle)]
 extern "C" fn get_idle_task_sp() -> usize {
-    Kernel::lock(|k|
-        // TODO: make absolute sure its safe here
-        unsafe {
-            k.task(IDLE_TID).stack.as_ref().unwrap_unchecked().sp()
-        }
-    )
+    Kernel::lock(|k| k.idle_sp())
 }
 
 #[unsafe(no_mangle)]

@@ -1,4 +1,4 @@
-use crate::scheduler::{self, Kernel, IDLE_TID};
+use crate::scheduler::{self, Kernel};
 use crate::task::{TaskId, TaskInfo, TaskMap, ops};
 use crate::error::{WhyError, WhyResult};
 
@@ -25,7 +25,8 @@ pub fn reclaim_memory() -> usize {
 pub fn sleep(ticks: u64) {
     if ticks > 0 {
         Kernel::lock(|k| {
-            k.sleep_task(k.current_task(), ticks);
+            let curr = k.current_task().expect("WhyOS: no current task");
+            k.sleep_task(curr, ticks);
         });
     }
 
@@ -33,10 +34,6 @@ pub fn sleep(ticks: u64) {
 }
 
 pub fn suspend(tid: TaskId) -> WhyResult<()> {
-    if tid == IDLE_TID {
-        return Err(WhyError::InvalidOperation);
-    }
-
     let should_yield = Kernel::lock(|k| k.suspend_task(tid))?;
 
     if should_yield {
@@ -46,10 +43,6 @@ pub fn suspend(tid: TaskId) -> WhyResult<()> {
 }
 
 pub fn resume(tid: TaskId) -> WhyResult<()> {
-    if tid == IDLE_TID {
-        return Err(WhyError::InvalidOperation);
-    }
-
     let should_yield = Kernel::lock(|k| k.resume_task(tid))?;
 
     if should_yield {
@@ -86,11 +79,14 @@ pub fn get_task_info(tid: TaskId) -> WhyResult<TaskInfo> {
 }
 
 pub fn get_current_tid() -> TaskId {
-    Kernel::lock(|k| k.current_task())
+    Kernel::lock(|k| k.current_task().expect("WhyOS: no current task"))
 }
 
 pub fn get_current_name() -> Option<&'static str> {
-    Kernel::lock(|k| k.task(k.current_task()).name)
+    Kernel::lock(|k| {
+        let curr = k.current_task().expect("WhyOS: no current task");
+        k.task(curr).name
+    })
 }
 
 pub fn get_uptime_ticks() -> u64 {
@@ -111,21 +107,21 @@ pub fn watchdog_subscribe(interval_ticks: u64) {
     }
 
     Kernel::lock(|k| {
-        let curr = k.current_task();
+        let curr = k.current_task().expect("WhyOS: no current task");
         k.watchdog_subscribe(curr, interval_ticks);
     })
 }
 
 pub fn watchdog_unsubscribe() {
     Kernel::lock(|k| {
-        let curr = k.current_task();
+        let curr = k.current_task().expect("WhyOS: no current task");
         k.watchdog_unsubscribe(curr);
     })
 }
 
 pub fn watchdog_feed() {
     Kernel::lock(|k| {
-        let curr = k.current_task();
+        let curr = k.current_task().expect("WhyOS: no current task");
         k.watchdog_feed(curr);
     })
 }

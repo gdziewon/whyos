@@ -1,10 +1,11 @@
+mod idle;
 mod preempt;
 mod kernel;
 
 use core::cell::RefCell;
 
 use critical_section::Mutex;
-pub use kernel::{Kernel, MAX_TASKS, TaskMask, IDLE_TID};
+pub use kernel::{Kernel, MAX_TASKS, TaskMask};
 
 static KERNEL: Mutex<RefCell<Kernel>> = Mutex::new(RefCell::new(Kernel::new()));
 
