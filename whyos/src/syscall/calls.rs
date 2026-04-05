@@ -18,6 +18,11 @@ pub fn exit() {
 }
 
 #[inline]
+pub fn kill(tid: TaskId) -> WhyResult<()> {
+    ops::kill_task(tid)
+}
+
+#[inline]
 pub fn reclaim_memory() -> usize {
     ops::reap_zombies()
 }

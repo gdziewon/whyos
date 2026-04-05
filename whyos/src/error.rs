@@ -1,3 +1,5 @@
+use num_enum::{TryFromPrimitive, IntoPrimitive};
+use core::convert::TryFrom;
 
 pub type WhyResult<T> = Result<T, WhyError>;
 
@@ -13,37 +15,33 @@ impl<T> ErrNo for WhyResult<T> {
     fn to_errno(self) -> usize {
         match self {
             Ok(_) => 0,
-            Err(e) => e.id() as usize,
+            Err(e) => e.into(),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum WhyError {
     OutOfMemory = 1,
     MaxTasksReached = 2,
     InvalidOperation = 3,
     InvalidTaskId = 4,
-    InternalError = u8::MAX
-}
-
-impl WhyError {
-    #[inline(always)]
-    pub const fn id(self) -> u8 {
-        self as u8
-    }
+    InternalError = 5,
 }
 
 impl From<usize> for WhyError {
     fn from(id: usize) -> Self {
-        match id {
-            1 => WhyError::OutOfMemory,
-            2 => WhyError::MaxTasksReached,
-            3 => WhyError::InvalidOperation,
-            4 => WhyError::InvalidTaskId,
-            _ => WhyError::InternalError,
-        }
+        u8::try_from(id)
+            .ok()
+            .and_then(|code| WhyError::try_from(code).ok())
+            .unwrap_or(WhyError::InternalError)
+    }
+}
+
+impl From<WhyError> for usize {
+    fn from(value: WhyError) -> Self {
+        u8::from(value) as usize
     }
 }
 

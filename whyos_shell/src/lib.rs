@@ -20,6 +20,7 @@ Commands:\r
   info|i <id>                 Show detailed task information\r
   suspend|s <id>              Suspend a task\r
   resume|r <id>               Resume a suspended task\r
+  kill|k <id>                 Kill a task (unsafe)\r
   list|l                      List available programs\r
   execute|e <name> [arg]      Execute a program\r
   reboot                      Reboot the system\r
@@ -45,6 +46,7 @@ enum Command<'a> {
     TaskInfo(TaskId),
     Suspend(TaskId),
     Resume(TaskId),
+    Kill(TaskId),
     Execute(&'a str, Option<usize>),
     List,
     Invalid(&'a str),

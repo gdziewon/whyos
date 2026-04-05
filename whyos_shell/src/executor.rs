@@ -89,6 +89,13 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
             }
         }
 
+        Command::Kill(tid) => {
+            match unsafe { whyos::kill(tid) } {
+                Ok(_) => fprint(writer, format_args!("Task {} killed\r\n", tid.id())),
+                Err(_) => fprint(writer, format_args!("Failed to kill task {}\r\n", tid.id())),
+            }
+        }
+
         Command::Execute(name, arg_opt) => {
             if let Some(prog) = programs.iter().find(|p| p.name == name) {
                 let arg = arg_opt.unwrap_or(prog.default_arg);

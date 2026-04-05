@@ -18,6 +18,7 @@ pub fn parse(text: &str) -> Command<'_> {
         "info" | "i" => parse_id(args, "Usage: info <id>", Command::TaskInfo),
         "suspend" | "s" => parse_id(args, "Usage: suspend <id>", Command::Suspend),
         "resume" | "r" => parse_id(args, "Usage: resume <id>", Command::Resume),
+        "kill" | "k" => parse_id(args, "Usage: kill <id>", Command::Kill),
         "execute" | "e" => parse_exec(args),
         "list" | "l" => Command::List,
         _ => Command::Unknown(trimmed),

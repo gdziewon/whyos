@@ -6,6 +6,7 @@ use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 static STOP_FLAG: AtomicBool = AtomicBool::new(false);
+static KILL_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 static TEST_MUTEX: whyos::Mutex<u32> = whyos::Mutex::new(0);
 static LOW_RAN: AtomicU32 = AtomicU32::new(0);
@@ -131,17 +132,18 @@ fn test_watchdog_feeding() -> TestResult {
 }
 
 extern "C" fn watchdog_feeder() {
-    whyos::watchdog_subscribe(1);
+    whyos::watchdog_subscribe(2);
     while !STOP_FEEDING.load(Ordering::Relaxed) {
         whyos::watchdog_feed();
     }
+    whyos::watchdog_unsubscribe();
 }
 
-// SHOULD PANIC
-#[allow(dead_code)]
 fn test_watchdog_starving() -> TestResult {
-    whyos::spawn_with_priority(watchdog_starver, 3).unwrap();
+    let tid = whyos::spawn_with_priority(watchdog_starver, 3).unwrap();
     whyos::sleep(10);
+
+    check!(whyos::task_info(tid).is_err(), "Task didn't die");
 
     Ok(())
 }
@@ -170,6 +172,39 @@ fn test_self_suspend() -> TestResult {
     Ok(())
 }
 
+fn test_kill_task() -> TestResult {
+    KILL_COUNTER.store(0, Ordering::Relaxed);
+
+    let tid = whyos::spawn_with_priority(kill_worker, 10).unwrap();
+
+    whyos::sleep(10);
+    let before_kill = KILL_COUNTER.load(Ordering::Relaxed);
+    check!(before_kill > 0, "Kill worker did not start");
+
+    unsafe {
+        whyos::kill(tid).unwrap();
+    }
+
+    let info = whyos::task_info(tid).unwrap();
+    check!(matches!(info.state, whyos::TaskState::Zombie), "Task state is not Zombie after kill, got {:?}", info.state);
+
+    whyos::sleep(20);
+    let after_kill = KILL_COUNTER.load(Ordering::Relaxed);
+    check!(after_kill == before_kill, "Killed task kept running: before={}, after={}", before_kill, after_kill);
+
+    whyos::reclaim_memory();
+    check!(whyos::task_info(tid).is_err(), "Killed task was not reclaimed");
+
+    Ok(())
+}
+
+extern "C" fn kill_worker() {
+    loop {
+        KILL_COUNTER.fetch_add(1, Ordering::Relaxed);
+        whyos::sleep(5);
+    }
+}
+
 extern "C" fn self_suspender() {
     SELF_SUSPEND_FLAG.store(true, Ordering::Relaxed);
     whyos::suspend(whyos::current_tid()).unwrap();
@@ -181,6 +216,7 @@ harness! {
     test_reincarnation,
     test_suspend_mutex_inversion,
     test_watchdog_feeding,
-//    test_watchdog_starving,
-    test_self_suspend
+    test_watchdog_starving,
+    test_self_suspend,
+    test_kill_task,
 }

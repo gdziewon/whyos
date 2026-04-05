@@ -23,6 +23,9 @@ use syscall::SvcNumber as SVC;
 use crate::scheduler::TaskMask;
 use crate::task::TaskMap;
 
+// TODO: FIGURE OUT which ones are safe to call in MSP mode
+
+
 /// # Safety
 /// Should only be called once by "main"
 pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! { // todo: disable interrupts here?
@@ -65,7 +68,6 @@ pub fn sleep(ticks: u64) {
     }
 }
 
-/// TODO: make it safe once mutexes are on kernel
 /// # Safety
 /// Calling this function will immediately terminate the task and reclaim its memory
 /// however it will NOT run any "Drop" implementations for variables currently in scope
@@ -80,6 +82,21 @@ pub unsafe fn exit() -> ! {
             options(noreturn)
         );
     }
+}
+
+/// # Safety
+/// Same as exit()
+#[inline]
+pub unsafe fn kill(tid: TaskId) -> WhyResult<()> {
+    let err: usize;
+    unsafe {
+        asm!(
+            "svc {ID}",
+            ID = const SVC::Kill.id(),
+            inout("r0") tid.id() => err,
+        );
+    };
+    error::from_errno(err)
 }
 
 #[inline]

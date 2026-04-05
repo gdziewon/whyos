@@ -11,10 +11,10 @@ static KERNEL: Mutex<RefCell<Kernel>> = Mutex::new(RefCell::new(Kernel::new()));
 
 impl Kernel {
     #[inline]
-    pub fn lock<R>(f: impl FnOnce(&mut Self) -> R) -> R {
+    pub fn lock<R>(kernel_op: impl FnOnce(&mut Self) -> R) -> R {
         critical_section::with(|cs| {
             let mut kernel = KERNEL.borrow_ref_mut(cs);
-            f(&mut kernel)
+            kernel_op(&mut kernel)
         })
     }
 }

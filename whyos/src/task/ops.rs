@@ -27,12 +27,21 @@ pub fn spawn(
 }
 
 pub fn kill_current_task() {
-    Kernel::lock(|k| {
-        let current = k.current_task().expect("WhyOS: no current task");
-        k.make_zombie(current);
+    let current = Kernel::lock(|k| {
+        k.current_task().expect("WhyOS: no current task")
     });
 
-    scheduler::yield_now();
+    kill_task(current).expect("WhyOS: Current task unallocated??");
+}
+
+pub fn kill_task(tid: TaskId) -> WhyResult<()>{
+    let should_yield = Kernel::lock(|k| k.make_zombie(tid))?;
+
+    if should_yield {
+        scheduler::yield_now();
+    }
+
+    Ok(())
 }
 
 pub fn reap_zombies() -> usize {

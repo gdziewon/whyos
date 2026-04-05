@@ -19,5 +19,7 @@ pub use tcb::Tcb;
 
 pub(crate) extern "C" fn task_exit_trampoline() -> ! {
 	ops::kill_current_task();
-	panic!()
+	loop {
+		cortex_m::asm::wfi();
+	}
 }

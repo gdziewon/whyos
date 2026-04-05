@@ -52,16 +52,26 @@ impl Kernel {
     }
 
     pub fn watchdog_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
-        let task = &mut self.tasks[tid];
+        let mut kill_task = false;
 
-        if let Some(bowl) = task.watchdog_remaining_ticks.as_mut() {
-            if *bowl == 0 {
-                panic!(
-                    "Task {} ({}) didn't feed the watchdog for {}",
-                    tid.id(), task.name.unwrap_or("'no name'"), task.watchdog_interval_ticks
-                );
+        {
+            let task = &mut self.tasks[tid];
+
+            if let Some(bowl) = task.watchdog_remaining_ticks.as_mut() {
+                if *bowl == 0 {
+                    defmt::warn!(
+                        "WhyOS: Task {} didn't feed the watchdog for {} ticks - killing it",
+                        tid.id(), task.watchdog_interval_ticks
+                    );
+                    kill_task = true;
+                } else {
+                    *bowl -= 1;
+                }
             }
-            *bowl -= 1;
+        }
+
+        if kill_task {
+            self.make_zombie(tid).unwrap();
         }
     }
 
@@ -216,14 +226,17 @@ impl Kernel {
     }
 
     // returns true if it was self-remove
-    pub fn make_zombie(&mut self, tid: TaskId) -> bool {
+    pub fn make_zombie(&mut self, tid: TaskId) -> WhyResult<bool> {
+        if !self.allocated.is_set(tid) {
+            return Err(WhyError::InvalidTaskId);
+        }
         self.ready.remove(tid);
         self.sleeping.remove(tid); // just in case, it should be impossible
 
         self.zombies.add(tid);
         self.tasks[tid].state = TaskState::Zombie;
 
-        self.current_task == Some(tid)
+        Ok(self.current_task == Some(tid))
     }
 
     pub fn remove_zombie(&mut self, tid: TaskId) -> Option<TaskStack> {

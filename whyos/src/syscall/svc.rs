@@ -6,6 +6,29 @@ use crate::{TaskId, TaskInfo};
 use crate::syscall::{self, SvcNumber};
 use crate::error::{ErrNo, SUCCESS, WhyError};
 
+#[repr(transparent)]
+struct SVCFrame<'a> {
+    ef: &'a mut ExceptionFrame
+}
+
+impl SVCFrame<'_> {
+    fn set_r0<T: Into<usize>>(&mut self, val: T) {
+        unsafe { self.ef.set_r0(val.into() as u32) };
+    }
+
+    fn set_r1<T: Into<usize>>(&mut self, val: T) {
+        unsafe { self.ef.set_r1(val.into() as u32) };
+    }
+
+    fn r0(&self) -> usize {
+        self.ef.r0() as usize
+    }
+
+    fn r1(&self) -> usize {
+        self.ef.r1() as usize
+    }
+}
+
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
 pub unsafe extern "C" fn SVCall() { // todo: probably can be optimised
@@ -60,9 +83,9 @@ pub unsafe extern "C" fn SVCall() { // todo: probably can be optimised
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
+extern "C" fn svc_dispatch(mut sf: SVCFrame, svc_id: u8) {
     let Ok(svc) = SvcNumber::try_from(svc_id) else {
-        unsafe { ef.set_r0(WhyError::InvalidOperation as u32); }
+        sf.set_r0(WhyError::InvalidOperation);
         return;
     };
 
@@ -71,83 +94,79 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
         SVC::Start => panic!("BOOTSTRAP REJECTION FAILED"),
         SVC::Yield => { syscall::yield_now(); } // PenSV has lower prio, it will execute once we return from SVC
         SVC::Sleep => {
-            let ticks = (ef.r0() as u64) | ((ef.r1() as u64) << 32);
+            let ticks = (sf.r0() as u64) | ((sf.r1() as u64) << 32);
             syscall::sleep(ticks);
         },
         SVC::Exit => {
             syscall::exit();
         },
         SVC::Suspend => {
-            let res = TaskId::new(ef.r0() as usize)
+            let res = TaskId::new(sf.r0())
                 .and_then(
                     syscall::suspend
                 )
                 .to_errno();
 
-            unsafe { ef.set_r0(res as u32) };
+            sf.set_r0(res);
         },
         SVC::Resume => {
-            let res = TaskId::new(ef.r0() as usize)
+            let res = TaskId::new(sf.r0())
                 .and_then(
                     syscall::resume
                 )
                 .to_errno();
 
-            unsafe { ef.set_r0(res as u32) };
+            sf.set_r0(res);
         },
         SVC::GetCurrentTid => {
             let tid= syscall::get_current_tid().id();
-            unsafe { ef.set_r0(tid as u32) };
+            sf.set_r0(tid);
         },
         SVC::GetCurrentName => {
             match syscall::get_current_name() {
-                Some(name) => unsafe {
-                    ef.set_r0(name.as_ptr() as u32);
-                    ef.set_r1(name.len() as u32);
+                Some(name) => {
+                    sf.set_r0(name.as_ptr() as usize);
+                    sf.set_r1(name.len());
                 },
-                None => unsafe {
-                    ef.set_r0(0);
-                    ef.set_r1(0);
+                None => {
+                    sf.set_r0(0usize);
+                    sf.set_r1(0usize);
                 }
             }
         },
         SVC::GetUptimeTicks => {
             let ticks = syscall::get_uptime_ticks();
-            unsafe {
-                ef.set_r0(ticks as u32);
-                ef.set_r1((ticks >> 32) as u32);
-            }
+            sf.set_r0(ticks as usize);
+            sf.set_r1((ticks >> 32) as usize);
         },
         SVC::GetTaskCount => {
-            unsafe { ef.set_r0(syscall::get_task_count() as u32) };
+            sf.set_r0(syscall::get_task_count());
         }
         SVC::GetTaskInfo => {
-            let res = TaskId::new(ef.r0() as usize)
+            let res = TaskId::new(sf.r0())
                 .and_then(
                     syscall::get_task_info
                 );
 
             match res {
                 Ok(info) => {
-                    let out_ptr = ef.r1() as *mut TaskInfo;
-                    unsafe {
-                        out_ptr.write(info);
-                        ef.set_r0(SUCCESS as u32);
-                    }
+                    let out_ptr = sf.r1() as *mut TaskInfo;
+                    unsafe { out_ptr.write(info) };
+                    sf.set_r0(SUCCESS);
                 },
-                Err(e) => unsafe { ef.set_r0(e as u32) },
+                Err(e) => sf.set_r0(e),
             }
         },
         SVC::GetActiveTasks => {
             let allocated_map = syscall::get_allocated_tasks();
-            unsafe { ef.set_r0(allocated_map.raw().into()) }; // FIXME: unwrap to check for errors for now
+            sf.set_r0(allocated_map.raw() as usize); // FIXME: unwrap to check for errors for now
         },
         SVC::ReclaimMemory => {
             let reclaimed = syscall::reclaim_memory();
-            unsafe { ef.set_r0(reclaimed as u32) };
+            sf.set_r0(reclaimed);
         },
         SVC::WatchdogSubscribe => {
-            let interval = (ef.r0() as u64) | ((ef.r1() as u64) << 32);
+            let interval = (sf.r0() as u64) | ((sf.r1() as u64) << 32);
             syscall::watchdog_subscribe(interval);
         },
         SVC::WatchdogUnsubscribe => {
@@ -157,7 +176,7 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
             syscall::watchdog_feed();
         },
         SVC::Spawn => {
-            let args_ptr = ef.r0() as *const syscall::SpawnArgs;
+            let args_ptr = sf.r0() as *const syscall::SpawnArgs;
             let args = unsafe { &*args_ptr };
 
             let entry = unsafe { core::mem::transmute::<usize, TaskEntryPoint>(args.entry) };
@@ -172,14 +191,22 @@ extern "C" fn svc_dispatch(ef: &mut ExceptionFrame, svc_id: u8) {
             };
 
             match ops::spawn(entry, args.arg, name, args.priority, args.stack_size) {
-                Ok(tid) => unsafe {
-                    ef.set_r0(SUCCESS as u32);
-                    ef.set_r1(tid.id() as u32);
+                Ok(tid) => {
+                    sf.set_r0(SUCCESS);
+                    sf.set_r1(tid.id());
                 },
-                Err(e) => unsafe {
-                    ef.set_r0(e as u32);
+                Err(e) => {
+                    sf.set_r0(e);
                 }
             }
+        },
+        SVC::Kill => {
+            let res = TaskId::new(sf.r0())
+                .and_then(
+                    syscall::kill
+                )
+                .to_errno();
+            sf.set_r0(res);
         },
         SVC::Reboot => {
             syscall::reboot();

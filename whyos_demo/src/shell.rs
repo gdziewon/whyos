@@ -120,6 +120,15 @@ extern "C" fn prog_counter(mut count: usize) {
     }
 }
 
+extern "C" fn prog_timer(mut ticks: usize) {
+    let tid = whyos::current_tid();
+    while ticks > 0 {
+        ticks -= 1;
+        whyos::sleep(1);
+    }
+    uprintln!("TIMER {} DONE", tid.id());
+}
+
 static PROGRAMS: &[Program] = &[ // todo: add more programs
     Program {
         name: "cnt",
@@ -135,6 +144,14 @@ static PROGRAMS: &[Program] = &[ // todo: add more programs
         entry: prog_fib,
         default_arg: 10,
         priority: 2,
+        stack_size: StackSize::SMALL
+    },
+    Program {
+        name: "tim",
+        desc: "Sets a timer for N ticks",
+        entry: prog_timer,
+        default_arg: 10000,
+        priority: 3,
         stack_size: StackSize::SMALL
     }
 ];

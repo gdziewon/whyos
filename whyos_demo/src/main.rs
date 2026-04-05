@@ -34,6 +34,7 @@ fn main() -> ! {
             .expect("Failed to spawn blinky");
     }
 
+
     #[cfg(feature = "shell")]
     shell::init_shell(board.uart);
 
