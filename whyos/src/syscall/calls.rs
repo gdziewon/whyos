@@ -1,3 +1,5 @@
+use core::num::NonZero;
+
 use crate::scheduler::{self, Kernel};
 use crate::task::{TaskId, TaskInfo, TaskMap, ops};
 use crate::error::{WhyError, WhyResult};
@@ -28,7 +30,7 @@ pub fn reclaim_memory() -> usize {
 }
 
 pub fn sleep(ticks: u64) {
-    if ticks > 0 {
+    if let Some(ticks) = NonZero::new(ticks) {
         Kernel::lock(|k| {
             let curr = k.current_task().expect("WhyOS: no current task");
             k.sleep_task(curr, ticks);

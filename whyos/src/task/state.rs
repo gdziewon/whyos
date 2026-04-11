@@ -1,16 +1,20 @@
-use core::fmt;
+use core::{fmt, num::NonZero};
 
 use crate::error::WhyError;
 
 
 // inspired by https://freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/02-Task-states
 #[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
-#[repr(u8)]
+pub enum BlockReason {
+    Sleep(NonZero<u64>),
+    WaitQueue(u32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum TaskState {
     Ready,
     Running,
-    Blocked,
-    Sleeping,
+    Blocked(BlockReason),
     Suspended(ResumeContext),
     Zombie,
     Dead
@@ -22,8 +26,7 @@ impl fmt::Display for TaskState {
         match *self {
             Ts::Ready => f.pad("Ready"),
             Ts::Running => f.pad("Running"),
-            Ts::Blocked => f.pad("Blocked"),
-            Ts::Sleeping => f.pad("Sleeping"),
+            Ts::Blocked { .. } => f.pad("Blocked"),
             Ts::Suspended(_) => f.pad("Suspended"),
             Ts::Zombie => f.pad("Zombie"),
             Ts::Dead => f.pad("Dead"),
@@ -34,8 +37,7 @@ impl fmt::Display for TaskState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum ResumeContext {
     Ready,
-    Blocked,
-    Sleeping,
+    Blocked(BlockReason),
 }
 
 impl From<ResumeContext> for TaskState {
@@ -45,8 +47,7 @@ impl From<ResumeContext> for TaskState {
         use ResumeContext as Rctx;
         match value {
             Rctx::Ready => Ts::Ready,
-            Rctx::Blocked => Ts::Blocked,
-            Rctx::Sleeping => Ts::Sleeping,
+            Rctx::Blocked(reason) => Ts::Blocked(reason),
         }
     }
 }
@@ -60,8 +61,7 @@ impl TryFrom<TaskState> for ResumeContext {
         use ResumeContext as Rctx;
         match value {
             Ts::Ready | TaskState::Running => Ok(Rctx::Ready),
-            Ts::Blocked => Ok(Rctx::Blocked),
-            Ts::Sleeping => Ok(Rctx::Sleeping),
+            Ts::Blocked(reason) => Ok(Rctx::Blocked(reason)),
             _ => Err(WhyError::InvalidOperation)
         }
     }

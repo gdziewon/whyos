@@ -6,7 +6,7 @@ pub use mutex::Mutex;
 pub use queue::Queue;
 pub use sem::Semaphore;
 
-use crate::{TaskState, scheduler::Kernel, task::TaskMap};
+use crate::{TaskState, scheduler::Kernel, task::{TaskMap, BlockReason}};
 
 // TODO: ADD SYSCALLS FOR ITC!!!!!
 
@@ -24,7 +24,7 @@ impl WaitQueue {
         Kernel::lock(|k| {
             let curr = k.current_task().expect("WhyOS: idle cannot block on wait queues");
             self.waiting.add(curr);
-            k.block_task(curr);
+            k.block_task(curr, BlockReason::WaitQueue(0)); // FIXME id?
         })
     }
 
@@ -42,7 +42,7 @@ impl WaitQueue {
 
             let best_task = self.waiting
                 .iter()
-                .filter(|&tid| k.task(tid).state == TaskState::Blocked) // only wake tasks that are actually blocked (to avoid lost wakeup problem)
+                .filter(|&tid| matches!(k.task(tid).state, TaskState::Blocked { .. })) // only wake tasks that are actually blocked (to avoid lost wakeup problem)
                 .min_by_key(|&tid| k.task(tid).priority);
 
             if let Some(tid) = best_task {

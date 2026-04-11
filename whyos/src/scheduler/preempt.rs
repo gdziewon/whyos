@@ -2,7 +2,7 @@ use core::arch::naked_asm;
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 
-use crate::scheduler::Kernel;
+use crate::{TaskState, scheduler::Kernel, task::BlockReason};
 
 #[unsafe(no_mangle)]
 extern "C" fn get_idle_task_sp() -> usize {
@@ -64,10 +64,13 @@ fn SysTick() {
         let now = k.tick();
 
         // wake up sleeping tasks
-        for tid in k.sleeping().iter() {
+        for tid in k.blocked().iter() {
             let task = k.task(tid);
-            if task.wakeup_time <= now {
-                k.wake_task(tid);
+
+            if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state {
+                if wakup_time.get() <= now {
+                    k.wake_task(tid)
+                }
             }
         }
 
