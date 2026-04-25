@@ -1,6 +1,6 @@
 use core::num::NonZero;
 
-use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, task::{BlockReason, TaskId, TaskMap, TaskStack, TaskTable, Tcb, Watchdog}};
+use crate::{TaskState, error::{WhyError, WhyResult}, task::{BlockReason, TaskId, TaskMap, TaskStack, TaskTable, Tcb, Watchdog}};
 
 use super::idle::IdleTask;
 
@@ -142,12 +142,11 @@ impl Kernel {
         let task = &mut self.tasks[tid];
 
         // already suspended
-        if let TaskState::Suspended(_) = task.state {
+        if let TaskState::Blocked(BlockReason::Suspended) = task.state {
             return Ok(false);
         }
 
-        let ctx: ResumeContext = task.state.try_into()?;
-        task.state = TaskState::Suspended(ctx);
+        task.state = TaskState::Blocked(BlockReason::Suspended);
 
         self.ready.remove(tid);
         self.blocked.remove(tid);
@@ -163,17 +162,13 @@ impl Kernel {
 
         let task = &mut self.tasks[tid];
 
-        let TaskState::Suspended(ctx) = task.state else {
+        let TaskState::Blocked(BlockReason::Suspended) = task.state else {
             return Ok(false);
         };
 
-        match ctx {
-            ResumeContext::Ready | ResumeContext::Blocked { .. } => {
-                task.state = TaskState::Ready;
-                self.ready.add(tid);
-                Ok(true)
-            },
-        }
+        task.state = TaskState::Ready;
+        self.ready.add(tid);
+        Ok(true)
     }
 
     pub fn spawn_task(

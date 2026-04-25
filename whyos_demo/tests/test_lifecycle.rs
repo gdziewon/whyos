@@ -22,7 +22,7 @@ fn test_suspend_resume() -> TestResult {
 
     whyos::suspend(tid).unwrap();
     let info = whyos::task_info(tid).unwrap();
-    check!(matches!(info.state, whyos::TaskState::Suspended(_)), "Task state is not Suspended, got {:?}", info.state);
+    check!(matches!(info.state, whyos::TaskState::Blocked(whyos::BlockReason::Suspended)), "Task state is not Suspended, got {:?}", info.state);
 
     whyos::sleep(100);
 
@@ -91,7 +91,7 @@ fn test_suspend_mutex_inversion() -> TestResult {
     whyos::suspend(high_tid).unwrap();
 
     let info = whyos::task_info(high_tid).unwrap();
-    check!(matches!(info.state, whyos::TaskState::Suspended(_)), "Task state is not Suspended, got {:?}", info.state);
+    check!(matches!(info.state, whyos::TaskState::Blocked(whyos::BlockReason::Suspended)), "Task state is not Suspended, got {:?}", info.state);
 
     whyos::sleep(100);
 
@@ -162,7 +162,7 @@ fn test_self_suspend() -> TestResult {
     check!(SELF_SUSPEND_FLAG.load(Ordering::Relaxed), "Task didn't run");
 
     let info = whyos::task_info(tid).unwrap();
-    check!(matches!(info.state, whyos::TaskState::Suspended(_)), "Task didn't suspend itself");
+    check!(matches!(info.state, whyos::TaskState::Blocked(whyos::BlockReason::Suspended)), "Task didn't suspend itself");
 
     whyos::resume(tid).unwrap();
 

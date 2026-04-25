@@ -1,13 +1,12 @@
 use core::{fmt, num::NonZero};
 
-use crate::error::WhyError;
-
 
 // inspired by https://freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/02-Task-states
 #[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum BlockReason {
     Sleep(NonZero<u64>),
     WaitQueue(u32),
+    Suspended
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
@@ -15,7 +14,6 @@ pub enum TaskState {
     Ready,
     Running,
     Blocked(BlockReason),
-    Suspended(ResumeContext),
     Zombie,
     Dead
 }
@@ -27,42 +25,8 @@ impl fmt::Display for TaskState {
             Ts::Ready => f.pad("Ready"),
             Ts::Running => f.pad("Running"),
             Ts::Blocked { .. } => f.pad("Blocked"),
-            Ts::Suspended(_) => f.pad("Suspended"),
             Ts::Zombie => f.pad("Zombie"),
             Ts::Dead => f.pad("Dead"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
-pub enum ResumeContext {
-    Ready,
-    Blocked(BlockReason),
-}
-
-impl From<ResumeContext> for TaskState {
-    #[inline]
-    fn from(value: ResumeContext) -> Self {
-        use TaskState as Ts;
-        use ResumeContext as Rctx;
-        match value {
-            Rctx::Ready => Ts::Ready,
-            Rctx::Blocked(reason) => Ts::Blocked(reason),
-        }
-    }
-}
-
-impl TryFrom<TaskState> for ResumeContext {
-    type Error = WhyError;
-
-    #[inline]
-    fn try_from(value: TaskState) -> Result<Self, Self::Error> {
-        use TaskState as Ts;
-        use ResumeContext as Rctx;
-        match value {
-            Ts::Ready | TaskState::Running => Ok(Rctx::Ready),
-            Ts::Blocked(reason) => Ok(Rctx::Blocked(reason)),
-            _ => Err(WhyError::InvalidOperation)
         }
     }
 }
