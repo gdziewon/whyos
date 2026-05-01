@@ -1,6 +1,6 @@
 use core::num::NonZero;
 
-use crate::{TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskId, TaskMap, TaskStack, TaskTable, Tcb, Watchdog}};
+use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskId, TaskMap, TaskStack, TaskTable, Tcb, Watchdog}};
 
 use super::idle::IdleTask;
 
@@ -124,11 +124,12 @@ impl Kernel {
         let task = &mut self.tasks[tid];
 
         // already suspended
-        if let TaskState::Blocked(BlockReason::Suspended) = task.state {
+        if let TaskState::Suspended(_) = task.state {
             return Ok(ContextSwitch::Continue);
         }
 
-        task.state = TaskState::Blocked(BlockReason::Suspended);
+        let ctx: ResumeContext = task.state.try_into()?;
+        task.state = TaskState::Suspended(ctx);
 
         self.ready.remove(tid);
         self.blocked.remove(tid);
@@ -143,13 +144,33 @@ impl Kernel {
 
         let task = &mut self.tasks[tid];
 
-        let TaskState::Blocked(BlockReason::Suspended) = task.state else {
+        let TaskState::Suspended(ctx) = task.state else {
             return Ok(ContextSwitch::Continue);
         };
 
-        task.state = TaskState::Ready;
-        self.ready.add(tid);
-        Ok(ContextSwitch::Yield) // todo: maybe check if we woken up higher prio
+        match ctx {
+            ResumeContext::Ready => {
+                task.state = TaskState::Ready;
+                self.ready.add(tid);
+                Ok(ContextSwitch::Yield)
+            },
+            ResumeContext::Blocked(reason @ BlockReason::Sleep(wakeup_time)) => {
+                if wakeup_time.get() <= self.system_ticks { // time to wake up
+                    task.state = TaskState::Ready;
+                    self.ready.add(tid);
+                    Ok(ContextSwitch::Yield)
+                } else {
+                    task.state = TaskState::Blocked(reason);
+                    self.blocked.add(tid);
+                    Ok(ContextSwitch::Continue)
+                }
+            },
+            ResumeContext::Blocked(_reason @ BlockReason::WaitQueue) => {
+                task.state = TaskState::Ready; // if blocked on waitqueue, go to ready - issues with lost wakeup
+                self.ready.add(tid);
+                Ok(ContextSwitch::Yield)
+            }
+        }
     }
 
     pub fn spawn_task(

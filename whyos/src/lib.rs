@@ -9,7 +9,7 @@ mod utils;
 
 pub use itc::{Mutex, Queue, Semaphore};
 pub use task::{TaskId, TaskBuilder, TaskInfo, StackSize};
-pub use task::{TaskRoutine, TaskRoutineArg, TaskState, BlockReason};
+pub use task::{TaskRoutine, TaskRoutineArg, TaskState, ResumeContext};
 pub use scheduler::MAX_TASKS;
 pub use error::WhyError;
 

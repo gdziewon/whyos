@@ -13,7 +13,7 @@ pub use id::TaskId;
 pub use info::TaskInfo;
 pub use map::TaskMap;
 pub use stack::{Stack, TaskEntryPoint, TaskStack};
-pub use state::{TaskState, BlockReason};
+pub use state::{TaskState, ResumeContext, BlockReason};
 pub use table::TaskTable;
 pub use tcb::{Tcb, Watchdog};
 
