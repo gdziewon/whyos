@@ -21,10 +21,10 @@ impl WaitQueue {
     }
 
     pub fn block_current(&mut self) {
+        let curr = crate::current_tid();
         Kernel::lock(|k| {
-            let curr = k.current_task().expect("WhyOS: idle cannot block on wait queues");
             self.waiting.add(curr);
-            k.block_task(curr, BlockReason::WaitQueue(0)); // FIXME id?
+            k.block_task(curr, BlockReason::WaitQueue);
         })
     }
 
@@ -42,7 +42,11 @@ impl WaitQueue {
 
             let best_task = self.waiting
                 .iter()
-                .filter(|&tid| matches!(k.task(tid).state, TaskState::Blocked { .. })) // only wake tasks that are actually blocked (to avoid lost wakeup problem)
+                .filter(|&tid|
+                    matches!(
+                        k.task(tid).state, TaskState::Blocked(BlockReason::WaitQueue)
+                    )
+                ) // only wake tasks that are actually blocked by ITC (to avoid lost wakeup problem)
                 .min_by_key(|&tid| k.task(tid).priority);
 
             if let Some(tid) = best_task {

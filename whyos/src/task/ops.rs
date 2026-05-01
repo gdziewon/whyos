@@ -1,4 +1,4 @@
-use crate::scheduler::{self, Kernel};
+use crate::scheduler::Kernel;
 use crate::task::{self, TaskStack, TaskId};
 use crate::error::{WhyError, WhyResult};
 use crate::memory;
@@ -24,24 +24,6 @@ pub fn spawn(
     Kernel::lock(|k| {
         k.spawn_task(name, priority, stack)
     })
-}
-
-pub fn kill_current_task() {
-    let current = Kernel::lock(|k| {
-        k.current_task().expect("WhyOS: no current task")
-    });
-
-    kill_task(current).expect("WhyOS: Current task unallocated??");
-}
-
-pub fn kill_task(tid: TaskId) -> WhyResult<()>{
-    let should_yield = Kernel::lock(|k| k.make_zombie(tid))?;
-
-    if should_yield {
-        scheduler::yield_now();
-    }
-
-    Ok(())
 }
 
 pub fn reap_zombies() -> usize {

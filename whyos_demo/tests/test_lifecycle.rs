@@ -1,11 +1,11 @@
 #![no_std]
 #![no_main]
 
+use whyos::kill;
 use whyos_demo::{harness, check, TestResult};
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
-static STOP_FLAG: AtomicBool = AtomicBool::new(false);
 static KILL_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 static TEST_MUTEX: whyos::Mutex<u32> = whyos::Mutex::new(0);
@@ -14,7 +14,7 @@ static LOW_RAN: AtomicU32 = AtomicU32::new(0);
 fn test_suspend_resume() -> TestResult {
     COUNTER.store(0, Ordering::Relaxed);
 
-    let tid = whyos::spawn_with_priority(worker_count, 10).unwrap();
+    let tid: whyos::TaskId = whyos::spawn_with_priority(worker_count, 10).unwrap();
 
     whyos::sleep(50);
     let val_before = COUNTER.load(Ordering::Relaxed);
@@ -37,12 +37,12 @@ fn test_suspend_resume() -> TestResult {
 
     check!(val_after > val_suspended, "Worker didnt resume: suspended={}, after={}", val_suspended, val_after);
 
-    STOP_FLAG.store(true, Ordering::Relaxed);
+    unsafe { kill(tid).unwrap() };
     Ok(())
 }
 
 extern "C" fn worker_count() {
-    while !STOP_FLAG.load(Ordering::Relaxed) {
+    loop {
         COUNTER.fetch_add(1, Ordering::Relaxed);
         whyos::sleep(10);
     }
@@ -132,11 +132,11 @@ fn test_watchdog_feeding() -> TestResult {
 }
 
 extern "C" fn watchdog_feeder() {
-    whyos::watchdog_subscribe(2);
+    whyos::wdt_sub(2);
     while !STOP_FEEDING.load(Ordering::Relaxed) {
-        whyos::watchdog_feed();
+        whyos::wdt_feed();
     }
-    whyos::watchdog_unsubscribe();
+    whyos::wdt_unsub();
 }
 
 fn test_watchdog_starving() -> TestResult {
@@ -149,7 +149,7 @@ fn test_watchdog_starving() -> TestResult {
 }
 
 extern "C" fn watchdog_starver() {
-    whyos::watchdog_subscribe(1);
+    whyos::wdt_sub(1);
     loop {}
 }
 
@@ -170,6 +170,12 @@ fn test_self_suspend() -> TestResult {
     check!(!SELF_SUSPEND_FLAG.load(Ordering::Relaxed), "Task didn't resume");
 
     Ok(())
+}
+
+extern "C" fn self_suspender() {
+    SELF_SUSPEND_FLAG.store(true, Ordering::Relaxed);
+    whyos::suspend(whyos::current_tid()).unwrap();
+    SELF_SUSPEND_FLAG.store(false, Ordering::Relaxed);
 }
 
 fn test_kill_task() -> TestResult {
@@ -203,12 +209,6 @@ extern "C" fn kill_worker() {
         KILL_COUNTER.fetch_add(1, Ordering::Relaxed);
         whyos::sleep(5);
     }
-}
-
-extern "C" fn self_suspender() {
-    SELF_SUSPEND_FLAG.store(true, Ordering::Relaxed);
-    whyos::suspend(whyos::current_tid()).unwrap();
-    SELF_SUSPEND_FLAG.store(false, Ordering::Relaxed);
 }
 
 harness! {

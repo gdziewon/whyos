@@ -18,8 +18,5 @@ pub use table::TaskTable;
 pub use tcb::{Tcb, Watchdog};
 
 pub(crate) extern "C" fn task_exit_trampoline() -> ! {
-	ops::kill_current_task();
-	loop {
-		cortex_m::asm::wfi();
-	}
+	unsafe { crate::exit() }
 }

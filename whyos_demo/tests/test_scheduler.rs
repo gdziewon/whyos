@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use whyos::kill;
 use whyos_demo::{check, harness, TestResult};
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
@@ -46,9 +47,9 @@ fn test_starvation() -> TestResult {
     COUNTER_A.store(0, Ordering::Relaxed);
     COUNTER_B.store(0, Ordering::Relaxed);
 
-    whyos::spawn_with_priority(worker_low, 20).unwrap();
+    let low_prio_tid = whyos::spawn_with_priority(worker_low, 20).unwrap();
 
-    whyos::spawn_with_priority(worker_high_hog, 5).unwrap();
+    let high_prio_tid = whyos::spawn_with_priority(worker_high_hog, 5).unwrap();
 
     whyos::sleep(200);
 
@@ -56,9 +57,14 @@ fn test_starvation() -> TestResult {
     let high_cnt = COUNTER_B.load(Ordering::Relaxed);
 
     defmt::info!("high_cnt {}", high_cnt);
-    check!(high_cnt > 4250, "High priority task didn't run enough"); // it's also for me, to know if performence is degrading
+    check!(high_cnt > 3145000, "High priority task didn't run enough"); // it's also for me, to know if performence is degrading
     check!(low_cnt == 0, "Low priority task ran! Scheduler failed strict preemption");
-    STOP_FLAG.store(true, Ordering::Relaxed);
+
+    unsafe {
+        kill(low_prio_tid).unwrap();
+        kill(high_prio_tid).unwrap();
+    }
+
     Ok(())
 }
 
@@ -67,26 +73,26 @@ extern "C" fn worker_low() {
 }
 
 extern "C" fn worker_high_hog() {
-    while !STOP_FLAG.load(Ordering::Relaxed) {
+    loop {
         COUNTER_B.fetch_add(1, Ordering::Relaxed);
-        for _ in 0..1000 { cortex_m::asm::nop(); }
     }
 }
 
 // Test fairness for same prio tasks
 fn test_fairness() -> TestResult {
+    STOP_FLAG.store(false, Ordering::Relaxed);
     COUNTER_A.store(0, Ordering::Relaxed);
     COUNTER_B.store(0, Ordering::Relaxed);
     COUNTER_C.store(0, Ordering::Relaxed);
     COUNTER_D.store(0, Ordering::Relaxed);
 
-    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_A).priority(10).spawn().unwrap();
-    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_B).priority(10).spawn().unwrap();
-    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_C).priority(10).spawn().unwrap();
-    whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_D).priority(10).spawn().unwrap();
+    let r1 = whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_A).priority(10).spawn().unwrap();
+    let r2 = whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_B).priority(10).spawn().unwrap();
+    let r3 =whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_C).priority(10).spawn().unwrap();
+    let r4 = whyos::TaskBuilder::with_static_ref(rr_worker, &COUNTER_D).priority(10).spawn().unwrap();
 
     whyos::sleep(100);
-
+    STOP_FLAG.store(true, Ordering::Relaxed);
     let a = COUNTER_A.load(Ordering::Relaxed);
     let b = COUNTER_B.load(Ordering::Relaxed);
     let c = COUNTER_C.load(Ordering::Relaxed);
@@ -99,14 +105,56 @@ fn test_fairness() -> TestResult {
     check!(min > 0, "One or more tasks starved");
     check!(max < min * 2, "Unfair scheduling");
 
+    unsafe {
+        kill(r1).unwrap();
+        kill(r2).unwrap();
+        kill(r3).unwrap();
+        kill(r4).unwrap();
+    }
+
     Ok(())
 }
 
 extern "C" fn rr_worker(flag: &'static AtomicU32) { loop { flag.fetch_add(1, Ordering::Relaxed); whyos::yield_cpu(); } }
 
 
+static COUNTER_PING: AtomicU32 = AtomicU32::new(0);
+static COUNTER_PONG: AtomicU32 = AtomicU32::new(0);
+
+extern "C" fn ping() {
+    loop {
+        COUNTER_PING.fetch_add(1, Ordering::Relaxed);
+        whyos::yield_cpu();
+    }
+}
+
+extern "C" fn pong() {
+    loop {
+        COUNTER_PONG.fetch_add(1, Ordering::Relaxed);
+        whyos::yield_cpu();
+    }
+}
+
+fn test_pingpong() -> TestResult {
+    let ping = whyos::spawn_with_priority(ping, 7).unwrap();
+    let pong = whyos::spawn_with_priority(pong, 7).unwrap();
+
+    whyos::sleep(100);
+    defmt::info!("Ping pong sum: {}",
+        COUNTER_PING.load(Ordering::Relaxed) + COUNTER_PONG.load(Ordering::Relaxed)
+    );
+
+    unsafe {
+        kill(ping).unwrap();
+        kill(pong).unwrap();
+    }
+
+    Ok(())
+}
+
 harness! {
     test_saturation,
     test_starvation,
     test_fairness,
+    test_pingpong
 }

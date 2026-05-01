@@ -69,14 +69,14 @@ fn SysTick() {
 
             if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state {
                 if wakup_time.get() <= now {
-                    k.wake_task(tid)
+                    k.unblock_task(tid)
                 }
             }
         }
 
         // software watchdog monitoring - ONLY FOR READY TASKS
         for tid in k.ready().iter() {
-            k.watchdog_check(tid);
+            k.wdt_check(tid);
         }
     });
 

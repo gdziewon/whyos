@@ -1,6 +1,7 @@
 mod idle;
 mod preempt;
 mod kernel;
+mod svc;
 
 use core::cell::RefCell;
 
@@ -19,6 +20,23 @@ impl Kernel {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ContextSwitch {
+    Yield,
+    Continue,
+}
+
+impl ContextSwitch {
+    #[inline]
+    pub const fn yield_if(condition: bool) -> Self {
+        if condition {
+            ContextSwitch::Yield
+        } else {
+            ContextSwitch::Continue
+        }
+    }
+}
+
 pub fn config_systick(syst: &mut cortex_m::peripheral::SYST, freq: u32) {
     syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
     syst.set_reload(freq);
@@ -27,7 +45,7 @@ pub fn config_systick(syst: &mut cortex_m::peripheral::SYST, freq: u32) {
     syst.enable_interrupt();
 }
 
-#[inline]
+#[inline(always)]
 pub fn yield_now() {
     cortex_m::peripheral::SCB::set_pendsv();
 }

@@ -20,7 +20,7 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
             print(writer, " ID | State     | Stack(Peak/Total) | Name\r\n");
             print(writer, "────+───────────+───────────────────+──────────────\r\n");
 
-            for tid in whyos::active_tasks() {
+            for tid in whyos::allocated_tasks() {
                 if let Ok(info) = whyos::task_info(tid) {
                     let name = info.name.unwrap_or("-");
 

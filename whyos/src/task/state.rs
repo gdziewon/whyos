@@ -5,7 +5,7 @@ use core::{fmt, num::NonZero};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum BlockReason {
     Sleep(NonZero<u64>),
-    WaitQueue(u32),
+    WaitQueue,
     Suspended
 }
 

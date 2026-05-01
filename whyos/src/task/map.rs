@@ -10,10 +10,6 @@ impl TaskMap {
         Self(Bitmap::<TaskMask>::new())
     }
 
-    pub const fn from(value: TaskMask) -> Self {
-        Self(Bitmap::<TaskMask>::from(value))
-    }
-
     #[inline]
     pub fn add(&mut self, tid: TaskId) {
         self.0.set(tid.id());
@@ -37,11 +33,6 @@ impl TaskMap {
     #[inline]
     pub fn first_free(&self) -> Option<TaskId> {
         self.0.first_unset().map(|tid| unsafe { TaskId::new_unchecked(tid) })
-    }
-
-    #[inline]
-    pub fn raw(&self) -> TaskMask {
-        self.0.raw()
     }
 
     #[inline]

@@ -1,10 +1,33 @@
+use core::num::NonZero;
+
 use crate::task::TaskStack;
 
 use super::TaskState;
 
 pub struct Watchdog {
-    pub remaining: u64,
-    pub interval: u64
+    remaining: u64,
+    interval: NonZero<u64>
+}
+
+impl Watchdog {
+    pub fn new(interval: NonZero<u64>) -> Self {
+        Self { remaining: interval.get(), interval }
+    }
+
+    pub fn feed(&mut self) {
+        self.remaining = self.interval.get()
+    }
+
+    pub fn check_n_tick(&mut self) -> bool {
+        if self.remaining == 0 {
+            true
+        } else {
+            self.remaining -= 1;
+            false
+        }
+    }
+
+    pub fn interval(&self) -> u64 { self.interval.get() }
 }
 
 // TODO: make these fields private?

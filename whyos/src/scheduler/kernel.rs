@@ -1,6 +1,6 @@
 use core::num::NonZero;
 
-use crate::{TaskState, error::{WhyError, WhyResult}, task::{BlockReason, TaskId, TaskMap, TaskStack, TaskTable, Tcb, Watchdog}};
+use crate::{TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskId, TaskMap, TaskStack, TaskTable, Tcb, Watchdog}};
 
 use super::idle::IdleTask;
 
@@ -53,57 +53,46 @@ impl Kernel {
         self.system_ticks
     }
 
-    pub fn watchdog_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
-        let mut kill_task = false;
-
-        {
-            let task = &mut self.tasks[tid];
-
-            if let Some(watchdog) = task.watchdog.as_mut() {
-                if watchdog.remaining == 0 {
-                    defmt::warn!(
-                        "WhyOS: Task {} didn't feed the watchdog for {} ticks - killing it",
-                        tid.id(), watchdog.interval
-                    );
-                    kill_task = true;
-                } else {
-                    watchdog.remaining -= 1;
-                }
-            }
-        }
-
-        if kill_task {
-            self.make_zombie(tid).unwrap();
-        }
-    }
-
-    pub fn watchdog_subscribe(&mut self, tid: TaskId, interval_ticks: u64) {
+    pub fn wdt_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
         let task = &mut self.tasks[tid];
 
-        task.watchdog = Some(Watchdog { remaining: interval_ticks, interval: interval_ticks });
+        if let Some(watchdog) = task.watchdog.as_mut() {
+            if watchdog.check_n_tick() {
+                defmt::warn!(
+                    "WhyOS: Task {} didn't feed the watchdog for {} ticks - killing it",
+                    tid.id(), watchdog.interval()
+                );
+                self.make_zombie(tid).unwrap();
+            }
+        }
     }
 
-    pub fn watchdog_unsubscribe(&mut self, tid: TaskId) {
+    pub fn wdt_sub(&mut self, tid: TaskId, interval: NonZero<u64>) {
+        let task = &mut self.tasks[tid];
+
+        task.watchdog = Some(Watchdog::new(interval));
+    }
+
+    pub fn wdt_unsub(&mut self, tid: TaskId) {
         let task = &mut self.tasks[tid];
 
         task.watchdog = None;
     }
 
-    pub fn watchdog_feed(&mut self, tid: TaskId) {
+    pub fn wdt_feed(&mut self, tid: TaskId) {
         let task = &mut self.tasks[tid];
 
         if let Some(watchdog) = task.watchdog.as_mut() {
-            watchdog.remaining = watchdog.interval;
+            watchdog.feed();
         }
     }
 
-    // return true if self-block
-    pub fn block_task(&mut self, tid: TaskId, reason: BlockReason) -> bool {
+    pub fn block_task(&mut self, tid: TaskId, reason: BlockReason) -> ContextSwitch {
         self.tasks[tid].state = TaskState::Blocked(reason);
         self.blocked.add(tid);
         self.ready.remove(tid);
 
-        self.current_task == Some(tid)
+        ContextSwitch::yield_if(self.current_task == Some(tid)) // self-block
     }
 
     pub fn unblock_task(&mut self, tid: TaskId) {
@@ -118,23 +107,16 @@ impl Kernel {
         }
     }
 
-    pub fn wake_task(&mut self, tid: TaskId) {
-        self.unblock_task(tid);
-    }
+    pub fn sleep_task(&mut self, tid: TaskId, ticks: NonZero<u64>) -> ContextSwitch {
+        let target_time = self.system_ticks.saturating_add(ticks.get()); // in case of overflow, eternal sleep
 
-    // return true if self-sleep
-    pub fn sleep_task(&mut self, tid: TaskId, ticks: NonZero<u64>) -> bool {
-        let target_time = self.system_ticks.checked_add(ticks.get())
-            .expect("WhyOS: Wakeup time overflow"); // FIXME: dont panic on overflow
-
-        // systime >=0, tiks >= 1 -> and overflow checked, so this is safe
+        // systime >=0, ticks >= 1 and saturating add, so this is safe
         let wakeup_time = unsafe { NonZero::new_unchecked(target_time) };
 
-        self.block_task(tid, BlockReason::Sleep(wakeup_time))
+        self.block_task(tid, BlockReason::Sleep(wakeup_time)) // self-sleep
     }
 
-    // returns true if task should yield (successful self suspend)
-    pub fn suspend_task(&mut self, tid: TaskId) -> WhyResult<bool> {
+    pub fn suspend_task(&mut self, tid: TaskId) -> WhyResult<ContextSwitch> {
         if !self.allocated.is_set(tid) {
             return Err(WhyError::InvalidTaskId);
         }
@@ -143,7 +125,7 @@ impl Kernel {
 
         // already suspended
         if let TaskState::Blocked(BlockReason::Suspended) = task.state {
-            return Ok(false);
+            return Ok(ContextSwitch::Continue);
         }
 
         task.state = TaskState::Blocked(BlockReason::Suspended);
@@ -151,11 +133,10 @@ impl Kernel {
         self.ready.remove(tid);
         self.blocked.remove(tid);
 
-        Ok(self.current_task == Some(tid))
+        Ok(ContextSwitch::yield_if(self.current_task == Some(tid))) // self-suspend
     }
 
-    // returnes true if task should yield (succesful resume)
-    pub fn resume_task(&mut self, tid: TaskId) -> WhyResult<bool> {
+    pub fn resume_task(&mut self, tid: TaskId) -> WhyResult<ContextSwitch> {
         if !self.allocated.is_set(tid) {
             return Err(WhyError::InvalidTaskId);
         }
@@ -163,12 +144,12 @@ impl Kernel {
         let task = &mut self.tasks[tid];
 
         let TaskState::Blocked(BlockReason::Suspended) = task.state else {
-            return Ok(false);
+            return Ok(ContextSwitch::Continue);
         };
 
         task.state = TaskState::Ready;
         self.ready.add(tid);
-        Ok(true)
+        Ok(ContextSwitch::Yield) // todo: maybe check if we woken up higher prio
     }
 
     pub fn spawn_task(
@@ -208,18 +189,17 @@ impl Kernel {
         self.idle = Some(IdleTask::new());
     }
 
-    // returns true if it was self-remove
-    pub fn make_zombie(&mut self, tid: TaskId) -> WhyResult<bool> {
+    pub fn make_zombie(&mut self, tid: TaskId) -> WhyResult<ContextSwitch> {
         if !self.allocated.is_set(tid) {
             return Err(WhyError::InvalidTaskId);
         }
         self.ready.remove(tid);
-        self.blocked.remove(tid); // todo: remove from waiting queue as well when ITC will be oin kernel
+        self.blocked.remove(tid);
 
         self.zombies.add(tid);
         self.tasks[tid].state = TaskState::Zombie;
 
-        Ok(self.current_task == Some(tid))
+        Ok(ContextSwitch::yield_if(self.current_task == Some(tid))) // self-remove
     }
 
     pub fn remove_zombie(&mut self, tid: TaskId) -> Option<TaskStack> {

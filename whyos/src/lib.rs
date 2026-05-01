@@ -1,6 +1,5 @@
 #![no_std]
 
-mod syscall;
 mod scheduler;
 mod task;
 mod itc;
@@ -14,14 +13,15 @@ pub use task::{TaskRoutine, TaskRoutineArg, TaskState, BlockReason};
 pub use scheduler::MAX_TASKS;
 pub use error::WhyError;
 
+pub use cortex_m;
+pub use cortex_m_rt;
+
 use core::arch::asm;
-use core::mem::MaybeUninit;
+use core::num::NonZero;
 
 use error::WhyResult;
-use syscall::SvcNumber as SVC;
-
-use crate::scheduler::TaskMask;
-use crate::task::TaskMap;
+use crate::scheduler::{ContextSwitch, Kernel};
+use crate::task::ops;
 
 // TODO: FIGURE OUT which ones are safe to call in MSP mode
 
@@ -32,9 +32,9 @@ pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! { // 
     task::ops::init_idle_task(); // todo: they shouldn't be called here, but after the svc call
     scheduler::config_systick(syst, freq);
 
-    unsafe {
+    unsafe { // bootstrap
         asm!(
-            "svc {ID}", ID = const SVC::Start.id(),
+            "svc 0",
             options(noreturn)
         );
     }
@@ -46,26 +46,19 @@ pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! { // 
 // todo: they all should probably return a Result
 #[inline]
 pub fn yield_cpu() {
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::Yield.id()
-        );
-    }
+    scheduler::yield_now();
 }
 
 #[inline]
 pub fn sleep(ticks: u64) {
-    let low = ticks as u32;
-    let high = (ticks >> 32) as u32;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::Sleep.id(),
-            in("r0") low,
-            in("r1") high,
-        );
+    if let Some(ticks) = NonZero::new(ticks) {
+        let curr = current_tid();
+        Kernel::lock(|k| {
+            k.sleep_task(curr, ticks);
+        });
     }
+
+    scheduler::yield_now();
 }
 
 /// # Safety
@@ -75,211 +68,107 @@ pub fn sleep(ticks: u64) {
 /// To ensure everything gets cleaned up, tasks should simply return from their entry point
 #[inline]
 pub unsafe fn exit() -> ! {
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::Exit.id(),
-            options(noreturn)
-        );
-    }
+    let curr = current_tid();
+    Kernel::lock(|k| k.make_zombie(curr).unwrap());
+    scheduler::yield_now();
+    loop {}
 }
 
 /// # Safety
 /// Same as exit()
 #[inline]
 pub unsafe fn kill(tid: TaskId) -> WhyResult<()> {
-    let err: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::Kill.id(),
-            inout("r0") tid.id() => err,
-        );
-    };
-    error::from_errno(err)
+    let switch = Kernel::lock(|k| k.make_zombie(tid))?;
+    if switch == ContextSwitch::Yield {
+        scheduler::yield_now();
+    }
+    Ok(())
 }
 
 #[inline]
 pub fn suspend(tid: TaskId) -> WhyResult<()> {
-    let err: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::Suspend.id(),
-            inout("r0") tid.id() => err,
-        );
+    let switch = Kernel::lock(|k| k.suspend_task(tid))?;
+    if switch == ContextSwitch::Yield {
+        scheduler::yield_now();
     }
-    error::from_errno(err)
+    Ok(())
 }
 
 #[inline]
 pub fn resume(tid: TaskId) -> WhyResult<()> {
-    let err: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::Resume.id(),
-            inout("r0") tid.id() => err,
-        );
+    let switch = Kernel::lock(|k| k.resume_task(tid))?;
+    if switch == ContextSwitch::Yield {
+        scheduler::yield_now();
     }
-    error::from_errno(err)
+    Ok(())
 }
 
 #[inline]
 pub fn current_tid() -> TaskId {
-    let tid: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::GetCurrentTid.id(),
-            out("r0") tid,
-        );
-    }
-    unsafe { TaskId::new_unchecked(tid) }
+    Kernel::lock(|k| k.current_task()
+        .expect("WhyOS: no current task")
+    )
 }
 
 #[inline]
-pub fn current_name() -> Option<&'static str> {
-    let ptr: usize;
-    let len: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::GetCurrentName.id(),
-            out("r0") ptr,
-            out("r1") len,
-        );
-    }
+pub fn uptime_ticks() -> u64 {
+    Kernel::lock(|k| k.system_ticks())
+}
 
-    let ptr = ptr as *const u8;
-    if ptr.is_null() {
-        None
-    } else {
-        Some(unsafe {
-            core::str::from_utf8_unchecked(
-                core::slice::from_raw_parts(ptr, len)
-            )
+#[inline]
+pub fn task_count() -> usize {
+    Kernel::lock(|k| k.allocated().ones())
+}
+
+#[inline]
+pub fn allocated_tasks() -> impl Iterator<Item = TaskId> {
+    Kernel::lock(|k| k.allocated().iter())
+}
+
+#[inline]
+pub fn task_info(tid: TaskId) -> WhyResult<TaskInfo> {
+    Kernel::lock(|k| {
+        if !k.allocated().is_set(tid) {
+            return Err(WhyError::InvalidTaskId);
+        }
+
+        let task = k.task(tid);
+        TaskInfo::new(tid, task)
+    })
+}
+
+#[inline]
+pub fn reclaim_memory() -> usize {
+    ops::reap_zombies()
+}
+
+#[inline]
+pub fn wdt_sub(interval_ticks: u64) {
+    if let Some(ticks) = NonZero::new(interval_ticks) {
+        let curr = current_tid();
+        Kernel::lock(|k| {
+            k.wdt_sub(curr, ticks);
         })
     }
 }
 
 #[inline]
-pub fn uptime_ticks() -> u64 {
-    let ticks_low: usize;
-    let ticks_high: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::GetUptimeTicks.id(),
-            out("r0") ticks_low,
-            out("r1") ticks_high,
-        );
-    }
-    (ticks_low as u64) | (ticks_high as u64) << 32
+pub fn wdt_unsub() {
+    let curr = current_tid();
+    Kernel::lock(|k| {
+        k.wdt_unsub(curr);
+    })
 }
 
 #[inline]
-pub fn task_count() -> usize {
-    let task_count: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::GetTaskCount.id(),
-            out("r0") task_count,
-        );
-    }
-    task_count
-}
-
-#[inline]
-pub fn task_info(tid: TaskId) -> WhyResult<TaskInfo> {
-    let err: usize;
-    let mut task_info = MaybeUninit::<TaskInfo>::uninit();
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::GetTaskInfo.id(),
-            inout("r0") tid.id() => err,
-            in("r1") task_info.as_mut_ptr()
-        );
-    }
-
-    if let Err(e) = error::from_errno(err) {
-        Err(e)
-    } else {
-        Ok(unsafe { task_info.assume_init() })
-    }
-}
-
-#[inline]
-pub fn active_tasks() -> impl Iterator<Item = TaskId> {
-    let active_tasks: TaskMask;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::GetActiveTasks.id(),
-            out("r0") active_tasks,
-        );
-    }
-
-    TaskMap::from(active_tasks)
-        .iter()
-}
-
-#[inline]
-pub fn reclaim_memory() -> usize {
-    let reclaimed: usize;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::ReclaimMemory.id(),
-            out("r0") reclaimed,
-        );
-    }
-    reclaimed
-}
-
-#[inline]
-pub fn watchdog_subscribe(interval_ticks: u64) {
-    let low = interval_ticks as u32;
-    let high = (interval_ticks >> 32) as u32;
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::WatchdogSubscribe.id(),
-            in("r0") low,
-            in("r1") high,
-        );
-    }
-}
-
-#[inline]
-pub fn watchdog_unsubscribe() {
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::WatchdogUnsubscribe.id(),
-        );
-    }
-}
-
-#[inline]
-pub fn watchdog_feed() {
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::WatchdogFeed.id(),
-        );
-    }
+pub fn wdt_feed() {
+    let curr = current_tid();
+    Kernel::lock(|k| {
+        k.wdt_feed(curr);
+    })
 }
 
 #[inline]
 pub fn reboot() -> ! {
-    unsafe {
-        asm!(
-            "svc {ID}",
-            ID = const SVC::Reboot.id(),
-            options(noreturn)
-        );
-    }
+    cortex_m::peripheral::SCB::sys_reset();
 }
