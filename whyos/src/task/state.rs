@@ -23,14 +23,15 @@ pub enum TaskState {
 impl fmt::Display for TaskState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use TaskState as Ts;
-        match *self {
-            Ts::Ready => f.pad("Ready"),
-            Ts::Running => f.pad("Running"),
-            Ts::Blocked { .. } => f.pad("Blocked"),
-            Ts::Suspended(_) => f.pad("Suspended"),
-            Ts::Zombie => f.pad("Zombie"),
-            Ts::Dead => f.pad("Dead"),
-        }
+        let s = match *self {
+            Ts::Ready => "Ready",
+            Ts::Running => "Running",
+            Ts::Blocked(_) => "Blocked",
+            Ts::Suspended(_) => "Suspended",
+            Ts::Zombie => "Zombie",
+            Ts::Dead => "Dead",
+        };
+        f.write_str(s)
     }
 }
 

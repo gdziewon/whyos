@@ -36,7 +36,7 @@ extern "C" fn takes_ptr_mut(a: *mut u32) {
 
 fn test_static_mut() -> TestResult {
     let buf_idx1 = 4;
-    let buffer: &'static mut [u32; 3] = cortex_m::singleton!(: [u32; 3] = [1, buf_idx1, 3]).unwrap();
+    let buffer: &'static mut [u32; 3] = whyos::cortex_m::singleton!(: [u32; 3] = [1, buf_idx1, 3]).unwrap();
     whyos::TaskBuilder::with_static_mut(takes_static_mut, buffer).spawn().unwrap();
     whyos::sleep(10);
 

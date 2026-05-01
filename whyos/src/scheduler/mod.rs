@@ -2,6 +2,8 @@ mod idle;
 mod preempt;
 mod kernel;
 mod svc;
+mod panic;
+mod fault;
 
 use core::cell::RefCell;
 
@@ -16,6 +18,17 @@ impl Kernel {
         critical_section::with(|cs| {
             let mut kernel = KERNEL.borrow_ref_mut(cs);
             kernel_op(&mut kernel)
+        })
+    }
+
+    #[inline]
+    pub fn try_lock<R>(kernel_op: impl FnOnce(&mut Self) -> R) -> Option<R> {
+        critical_section::with(|cs| {
+            if let Ok(mut kernel) = KERNEL.borrow(cs).try_borrow_mut() {
+                Some(kernel_op(&mut kernel))
+            } else {
+                None
+            }
         })
     }
 }

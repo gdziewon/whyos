@@ -1,7 +1,7 @@
 #![no_std]
 
 pub mod board;
-pub mod rt;
+pub mod img;
 
 #[cfg(feature = "shell")]
 pub mod shell;

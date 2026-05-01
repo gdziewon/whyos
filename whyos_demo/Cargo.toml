@@ -14,9 +14,6 @@ shell = [
 [dependencies]
 whyos = { path = "../whyos" }
 
-cortex-m = "0.7.6"
-cortex-m-rt = "0.7.5"
-
 embedded-hal = "1.0.0"
 rp235x-hal = { version = "0.3.0", features = [
   "binary-info", # include a static variable containing binary info

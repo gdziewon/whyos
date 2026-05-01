@@ -7,7 +7,7 @@ use rp235x_hal::{
     pac::{UART0, RESETS},
     uart::{DataBits, StopBits, UartConfig, UartPeripheral, Reader, Writer}
 };
-use cortex_m::peripheral::SYST;
+use whyos::cortex_m::peripheral::SYST;
 
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
@@ -31,7 +31,7 @@ pub struct Uart {
 impl Board {
     pub fn init() -> Self {
         let mut pac = hal::pac::Peripherals::take().expect("PAC taken");
-        let core = cortex_m::Peripherals::take().expect("Core taken");
+        let core = whyos::cortex_m::Peripherals::take().expect("Core taken");
 
         let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
 

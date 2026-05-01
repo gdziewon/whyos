@@ -60,7 +60,7 @@ pub fn init_shell(uart: Uart) {
 
     // enable NVIC interrupt for uart
     unsafe {
-        cortex_m::peripheral::NVIC::unmask(hal::pac::Interrupt::UART0_IRQ);
+        whyos::cortex_m::peripheral::NVIC::unmask(hal::pac::Interrupt::UART0_IRQ);
     }
 
     TaskBuilder::new(shell_task)
@@ -129,6 +129,28 @@ extern "C" fn prog_timer(mut ticks: usize) {
     uprintln!("TIMER {} DONE", tid.id());
 }
 
+extern "C" fn prog_panic(_: usize) {
+    uprintln!("AGHHH!");
+    panic!()
+}
+
+extern "C" fn prog_hardfault(_: usize) {
+    uprintln!("hard.");
+    whyos::sleep(10);
+
+    unsafe {
+        core::arch::asm!(
+            "ldr r4, [r0]", // will cause hardfault, r0 has invalid addr
+            in("r0") 0xDEADBEEF_u32,
+            in("r1") 0x00FACADE_u32,
+            in("r2") 0x8BADF00D_u32,
+            in("r3") 0xBAAAAAAD_u32,
+            in("r12") 0xEEEEEEEE_u32,
+            options(noreturn)
+        );
+    }
+}
+
 static PROGRAMS: &[Program] = &[ // todo: add more programs
     Program {
         name: "cnt",
@@ -152,6 +174,22 @@ static PROGRAMS: &[Program] = &[ // todo: add more programs
         entry: prog_timer,
         default_arg: 10000,
         priority: 3,
+        stack_size: StackSize::SMALL
+    },
+    Program {
+        name: "panic",
+        desc: "Triggers panic",
+        entry: prog_panic,
+        default_arg: 0,
+        priority: 1,
+        stack_size: StackSize::SMALL
+    },
+    Program {
+        name: "hard",
+        desc: "Triggers Hard Fault",
+        entry: prog_hardfault,
+        default_arg: 0,
+        priority: 1,
         stack_size: StackSize::SMALL
     }
 ];

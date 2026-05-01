@@ -9,7 +9,7 @@ rustflags = [
   "-C", "target-cpu=cortex-m33",
 ]
 
-runner = "probe-rs run --chip RP235x --disable-progressbars"
+runner = "probe-rs run --chip RP235x --no-catch-hardfault --no-catch-reset --disable-progressbars"
 
 [env]
 DEFMT_LOG = "trace" # enable all log levels
