@@ -1,7 +1,7 @@
 use core::arch::{naked_asm, asm};
 
 fn config_systick(syst: &mut cortex_m::peripheral::SYST, tick_hz: u32) {
-    let interval_us = 1_000_000 / tick_hz; // watchdog tick is 1 MHZ on RP2350
+    let interval_us = 1_000_000 / tick_hz; // ARCH: watchdog tick is 1 MHZ on RP2350
 
     syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::External);
     syst.set_reload(interval_us);
@@ -29,7 +29,7 @@ extern "C" fn reject_bootstrap() -> ! {
 
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
-pub(crate) unsafe extern "C" fn SVCall() {
+pub unsafe extern "C" fn SVCall() {
     naked_asm!(
         // check if we are running in PSP mode
         "tst lr, #4",

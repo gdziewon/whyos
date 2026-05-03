@@ -3,8 +3,12 @@ use crate::scheduler::Kernel;
 use super::frame::InitStackFrame;
 use super::start::SioTimer;
 
-//https://www2.eecs.berkeley.edu/Pubs/TechRpts/2016/EECS-2016-161.pdf#page=46
+// defined in linker as well, if it isnt defined, we use default handler from riscv-rt
+unsafe extern "C" {
+    fn MachineExternal();
+}
 
+//https://www2.eecs.berkeley.edu/Pubs/TechRpts/2016/EECS-2016-161.pdf#page=46
 #[derive(Clone, Copy)]
 pub enum TrapCause {
     Interrupt(Interrupt),
@@ -62,10 +66,6 @@ impl TrapCause {
             })
         }
     }
-}
-
-unsafe extern "C" {
-    fn MachineExternal();
 }
 
 #[unsafe(no_mangle)]

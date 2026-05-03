@@ -1,9 +1,9 @@
 #[cfg(target_arch = "arm")]
-mod cortex_m;
+mod arm;
 #[cfg(target_arch = "arm")]
-pub use cortex_m::*;
+pub use arm::*;
 
 #[cfg(target_arch = "riscv32")]
-mod riscv;
+mod riscv32;
 #[cfg(target_arch = "riscv32")]
-pub use riscv::*;
+pub use riscv32::*;

@@ -1,6 +1,7 @@
 use super::trap::trap_entry;
 use riscv::register::mie;
 
+/// ARCH: RP2350 specific
 pub struct SioTimer;
 impl SioTimer { // 3.1.8. RISC-V platform timer
     const BASE: usize = 0xd000_0000;

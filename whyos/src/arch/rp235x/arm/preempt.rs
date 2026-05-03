@@ -17,7 +17,7 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
 
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
-pub(crate) unsafe extern "C" fn PendSV() {
+pub unsafe extern "C" fn PendSV() {
     naked_asm!(
         // tells the assembler that we are using fpu
         ".fpu fpv5-sp-d16",
@@ -30,7 +30,7 @@ pub(crate) unsafe extern "C" fn PendSV() {
         // '!' updates r0
         "tst lr, #0x10",             // test bit 4 (identifies FPU usage)
         "it eq",                     // if FPU is enabled... (bit 4 == 0)
-        "vstmdbeq r0!, {{s16-s31}}", // save s16-s31, update r0 (OLD sp)
+        "vstmdbeq r0!, {{s16-s31}}", // save s16-s31, update r0 (OLD sp) /// ARCH: this is specific for cortex_m33, it requires FPU
 
         // push OLD tasks regs r4-r11 + lr, update r0 (OLD sp)
         "stmdb r0!, {{r4-r11, lr}}",
