@@ -1,5 +1,7 @@
 #![no_std]
 
+pub use embedded_io;
+
 mod parser;
 mod executor;
 

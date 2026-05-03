@@ -1,9 +1,6 @@
 mod idle;
-mod preempt;
 mod kernel;
-mod svc;
 mod panic;
-mod fault;
 
 use core::cell::RefCell;
 
@@ -50,15 +47,7 @@ impl ContextSwitch {
     }
 }
 
-pub fn config_systick(syst: &mut cortex_m::peripheral::SYST, freq: u32) {
-    syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-    syst.set_reload(freq);
-    syst.clear_current();
-    syst.enable_counter();
-    syst.enable_interrupt();
-}
-
 #[inline(always)]
 pub fn yield_now() {
-    cortex_m::peripheral::SCB::set_pendsv();
+    crate::arch::yield_now();
 }

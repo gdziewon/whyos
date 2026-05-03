@@ -20,6 +20,6 @@ unsafe fn HardFault(ef: &ExceptionFrame) -> ! {
         ef.r12(), ef.lr(), ef.pc(), ef.xpsr()
     );
     defmt::warn!("Rebooting system...");
-    cortex_m::asm::delay(10_000_000);
+    cortex_m::asm::delay(15_000_000);
     reboot()
 }

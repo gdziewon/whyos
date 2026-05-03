@@ -1,12 +1,10 @@
 #![no_std]
 #![no_main]
 
-use whyos_demo::{board::{Board, LedPin}, hal};
+use whyos_demo::{board::{Board, LedPin}};
 use defmt::info;
 use embedded_hal::digital::StatefulOutputPin as _;
-
-#[cfg(feature = "shell")]
-use whyos_demo::shell;
+use whyos_demo::hal::entry;
 
 static mut LED_STORAGE: Option<LedPin> = None;
 
@@ -20,9 +18,9 @@ extern "C" fn blinky_task(led_opt: &'static mut Option<LedPin>) {
     }
 }
 
-#[hal::entry]
+#[entry]
 fn main() -> ! {
-    let mut board = Board::init();
+    let board = Board::init();
 
     unsafe {
         LED_STORAGE = Some(board.led);
@@ -34,10 +32,9 @@ fn main() -> ! {
             .expect("Failed to spawn blinky");
     }
 
-
     #[cfg(feature = "shell")]
-    shell::init_shell(board.uart);
+    whyos_demo::shell::init_shell(board.uart);
 
     info!("Starting WhyOS...");
-    unsafe { whyos::start(&mut board.syst, board.sys_freq / 1000); }
+    unsafe { whyos::start(1000); }
 }

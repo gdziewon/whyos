@@ -12,7 +12,7 @@ static mut IDLE_MEMORY: IdleMemory = IdleMemory(MaybeUninit::uninit());
 extern "C" fn idle_entry(_: usize) {
     loop {
         crate::task::ops::reap_zombies();
-        cortex_m::asm::wfi();
+        crate::arch::wfi();
     }
 }
 

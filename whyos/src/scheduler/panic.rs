@@ -1,21 +1,13 @@
 use core::panic::PanicInfo;
-use core::arch::asm;
 use crate::{kill, yield_cpu};
 use crate::scheduler::Kernel;
 
-#[inline(always)]
-fn read_ipsr() -> u32 {
-    let ipsr: u32;
-    unsafe {
-        asm!("mrs {}, ipsr", out(reg) ipsr);
-    }
-    ipsr
-}
+use crate::arch::{is_in_task, bkpt, wfi};
 
 #[inline(never)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    let is_task = read_ipsr() == 0;
+    let is_task = is_in_task();
 
     if is_task {
         if let Some(tid) = Kernel::lock(|k| k.current_task()) {
@@ -25,18 +17,18 @@ fn panic(info: &PanicInfo) -> ! {
             yield_cpu();
 
             loop {
-                cortex_m::asm::wfi();
+                wfi();
             }
         } else {
             defmt::error!("WhyOS: Idle task panic: {}", info);
             loop {
-                cortex_m::asm::bkpt();
+                bkpt();
             }
         }
     } else {
         defmt::error!("WhyOS: KERNEL PANIC: {}", info);
         loop {
-            cortex_m::asm::bkpt();
+            bkpt();
         }
     }
 }

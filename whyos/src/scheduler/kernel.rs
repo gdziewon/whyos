@@ -11,6 +11,7 @@ pub struct Kernel {
     tasks: TaskTable,
     current_task: Option<TaskId>,
     system_ticks: u64,
+    timer_interval: u32, // todo: should it be an option?
     idle: Option<IdleTask>,
 
     allocated: TaskMap, // who exists
@@ -25,6 +26,7 @@ impl Kernel {
             tasks: TaskTable::new(),
             current_task: None,
             system_ticks: 0,
+            timer_interval: 0,
             idle: None,
             allocated: TaskMap::new(),
             ready: TaskMap::new(),
@@ -36,6 +38,8 @@ impl Kernel {
     pub fn task(&self, tid: TaskId) -> &Tcb { &self.tasks[tid] }
     pub fn current_task(&self) -> Option<TaskId> { self.current_task }
     pub fn system_ticks(&self) -> u64 { self.system_ticks }
+    pub fn set_timer_interval(&mut self, interval: u32) { self.timer_interval = interval }
+    pub fn timer_interval(&self) -> u32 { self.timer_interval }
     pub fn idle_sp(&self) -> usize {
         self.idle.as_ref().expect("WhyOS: idle task not initialized").sp()
     }
@@ -45,15 +49,34 @@ impl Kernel {
     pub fn blocked(&self) -> TaskMap { self.blocked }
     pub fn zombies(&self) -> TaskMap { self.zombies }
 
-    // TODO: add one, central state change function, add checks on each state change, possibly TaskRegistry struct with bitmaps
-    //fn set_task_state(&mut self, tid: TaskId, new_state: TaskState) {}
-
     pub fn tick(&mut self) -> u64 {
         self.system_ticks += 1;
         self.system_ticks
     }
 
-    pub fn wdt_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
+    pub fn on_tick(&mut self) -> u64 {
+        let now = self.tick();
+
+        // wake up sleeping tasks
+        for tid in self.blocked.iter() {
+            let task = self.task(tid);
+
+            if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state {
+                if wakup_time.get() <= now {
+                    self.unblock_task(tid)
+                }
+            }
+        }
+
+        // software watchdog monitoring - ONLY FOR READY TASKS
+        for tid in self.ready.iter() {
+            self.wdt_check(tid);
+        }
+
+        now
+    }
+
+    fn wdt_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
         let task = &mut self.tasks[tid];
 
         if let Some(watchdog) = task.watchdog.as_mut() {

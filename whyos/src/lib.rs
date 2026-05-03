@@ -1,5 +1,6 @@
 #![no_std]
 
+mod arch;
 mod scheduler;
 mod task;
 mod itc;
@@ -13,10 +14,6 @@ pub use task::{TaskRoutine, TaskRoutineArg, TaskState, ResumeContext};
 pub use scheduler::MAX_TASKS;
 pub use error::WhyError;
 
-pub use cortex_m;
-pub use cortex_m_rt;
-
-use core::arch::asm;
 use core::num::NonZero;
 
 use error::WhyResult;
@@ -28,16 +25,9 @@ use crate::task::ops;
 
 /// # Safety
 /// Should only be called once by "main"
-pub unsafe fn start(syst: &mut cortex_m::peripheral::SYST, freq: u32) -> ! { // todo: disable interrupts here?
+pub unsafe fn start(freq: u32) -> ! { // todo: disable interrupts here?
     task::ops::init_idle_task(); // todo: they shouldn't be called here, but after the svc call
-    scheduler::config_systick(syst, freq);
-
-    unsafe { // bootstrap
-        asm!(
-            "svc 0",
-            options(noreturn)
-        );
-    }
+    unsafe { arch::start_os(freq) }
 }
 
 #[inline] pub fn spawn(entry: TaskRoutine) -> WhyResult<TaskId> { TaskBuilder::new(entry).spawn() }
@@ -170,5 +160,5 @@ pub fn wdt_feed() {
 
 #[inline]
 pub fn reboot() -> ! {
-    cortex_m::peripheral::SCB::sys_reset();
+    arch::reset();
 }

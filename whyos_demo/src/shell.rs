@@ -1,97 +1,16 @@
-use core::convert::Infallible;
-
-use hal::pac::interrupt;
-use embedded_hal_nb::serial::Read;
-use embedded_io::{Write, ErrorType};
-
-use crate::{hal, board::{Uart, UartRx, UartTx}};
-use whyos::{Mutex, Queue, StackSize, TaskBuilder};
+use crate::{board::Uart, uart::{SHELL_RX_QUEUE, SharedUart, init_uart}, uprintln};
+use whyos::StackSize;
 use whyos_shell::{Shell, Program};
 
-
-static SHELL_RX_QUEUE: Queue<u8, 64> = Queue::new();
-
-static UART_RX: Mutex<Option<UartRx>> = Mutex::new(None);
-static UART_TX: Mutex<Option<UartTx>> = Mutex::new(None);
-
-#[derive(Clone, Copy)]
-pub struct SharedUart;
-
-impl ErrorType for SharedUart {
-    type Error = Infallible;
-}
-
-impl Write for SharedUart {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        let mut guard = UART_TX.lock();
-        if let Some(tx) = guard.as_mut() {
-            tx.write(buf)
-        } else {
-            Ok(0)
-        }
-    }
-
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        let mut guard = UART_TX.lock();
-        if let Some(tx) = guard.as_mut() {
-            tx.flush()
-        } else {
-            Ok(())
-        }
-    }
-}
-
-pub fn print(args: core::fmt::Arguments) {
-    let mut writer = SharedUart;
-    let _ = writer.write_fmt(args);
-}
-
-#[macro_export]
-macro_rules! uprintln {
-    ($($arg:tt)*) => {
-        $crate::shell::print(format_args!($($arg)*));
-        $crate::shell::print(format_args!("\r\n"));
-    }
-}
-
 pub fn init_shell(uart: Uart) {
-    *(UART_RX.lock()) = Some(uart.rx);
-    *(UART_TX.lock()) = Some(uart.tx);
+    init_uart(uart);
 
-    // enable NVIC interrupt for uart
-    unsafe {
-        whyos::cortex_m::peripheral::NVIC::unmask(hal::pac::Interrupt::UART0_IRQ);
-    }
-
-    TaskBuilder::new(shell_task)
+    whyos::TaskBuilder::new(crate::shell::shell_task)
         .priority(7)
-        .stack_size(StackSize::LARGE)
+        .stack_size(whyos::StackSize::LARGE)
         .name("shell")
         .spawn()
         .unwrap();
-}
-
-#[interrupt]
-fn UART0_IRQ() {
-    if let Some(mut guard) = UART_RX.try_lock() {
-        if let Some(rx) = guard.as_mut() {
-            loop {
-                match rx.read() {
-                    Ok(byte) => {
-                        // data! push to queu
-                        let _ = SHELL_RX_QUEUE.try_send(byte);
-                    }
-                    Err(nb::Error::WouldBlock) => {
-                        // no more data
-                        break;
-                    }
-                    Err(_e) => {
-                        break; // hw error
-                    }
-                }
-            }
-        }
-    }
 }
 
 extern "C" fn prog_fib(mut num: usize) {
@@ -126,7 +45,7 @@ extern "C" fn prog_timer(mut ticks: usize) {
         ticks -= 1;
         whyos::sleep(1);
     }
-    uprintln!("TIMER {} DONE", tid.id());
+    uprintln!("TIMER{} DONE", tid.id());
 }
 
 extern "C" fn prog_panic(_: usize) {
@@ -139,15 +58,8 @@ extern "C" fn prog_hardfault(_: usize) {
     whyos::sleep(10);
 
     unsafe {
-        core::arch::asm!(
-            "ldr r4, [r0]", // will cause hardfault, r0 has invalid addr
-            in("r0") 0xDEADBEEF_u32,
-            in("r1") 0x00FACADE_u32,
-            in("r2") 0x8BADF00D_u32,
-            in("r3") 0xBAAAAAAD_u32,
-            in("r12") 0xEEEEEEEE_u32,
-            options(noreturn)
-        );
+        let bad_ptr = 0xDEAD_BEEF as *const u32;
+        let _boom = core::ptr::read_volatile(bad_ptr);
     }
 }
 
@@ -195,7 +107,7 @@ static PROGRAMS: &[Program] = &[ // todo: add more programs
 ];
 
 #[unsafe(no_mangle)]
-extern "C" fn shell_task() {
+pub extern "C" fn shell_task() {
     let tx = SharedUart;
 
     let mut shell = Shell::new(&SHELL_RX_QUEUE, tx, PROGRAMS);

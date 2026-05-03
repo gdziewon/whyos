@@ -1,3 +1,19 @@
+[alias]
+
+
+build-arm = "build --release --target=thumbv8m.main-none-eabihf"
+build-riscv = "build --release --target=riscv32imac-unknown-none-elf"
+
+run-arm = "run --release --target=thumbv8m.main-none-eabihf"
+run-riscv = "run --release --target=riscv32imac-unknown-none-elf"
+
+probe-arm = [
+    "run",
+    "--release",
+    "--target=thumbv8m.main-none-eabihf",
+    "--config", "target.thumbv8m.main-none-eabihf.runner='probe-rs run --chip RP235x --no-catch-hardfault --no-catch-reset --disable-progressbars'"
+]
+
 [build]
 target = "thumbv8m.main-none-eabihf"
 
@@ -8,8 +24,15 @@ rustflags = [
   "-C", "link-arg=-Tdefmt.x", # use defmt.x linker script also (dfmt_rtt)
   "-C", "target-cpu=cortex-m33",
 ]
+runner = "picotool load -u -v -x -t elf"
 
-runner = "probe-rs run --chip RP235x --no-catch-hardfault --no-catch-reset --disable-progressbars"
+[target.riscv32imac-unknown-none-elf]
+rustflags = [
+  "-C", "link-arg=--nmagic",
+  "-C", "link-arg=-Tmemory-riscv.x",
+  "-C", "link-arg=-Tdefmt.x",
+]
+runner = "picotool load -u -v -x -t elf"
 
 [env]
 DEFMT_LOG = "trace" # enable all log levels

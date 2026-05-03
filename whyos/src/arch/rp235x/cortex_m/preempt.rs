@@ -2,7 +2,7 @@ use core::arch::naked_asm;
 use cortex_m::peripheral::SCB;
 use cortex_m_rt::exception;
 
-use crate::{TaskState, scheduler::Kernel, task::BlockReason};
+use crate::scheduler::Kernel;
 
 #[unsafe(no_mangle)]
 extern "C" fn get_idle_task_sp() -> usize {
@@ -14,9 +14,10 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
     Kernel::lock(|k| k.schedule(old_sp))
 }
 
+
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
-pub unsafe extern "C" fn PendSV() {
+pub(crate) unsafe extern "C" fn PendSV() {
     naked_asm!(
         // tells the assembler that we are using fpu
         ".fpu fpv5-sp-d16",
@@ -61,23 +62,7 @@ pub unsafe extern "C" fn PendSV() {
 #[exception]
 fn SysTick() {
     Kernel::lock(|k| {
-        let now = k.tick();
-
-        // wake up sleeping tasks
-        for tid in k.blocked().iter() {
-            let task = k.task(tid);
-
-            if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state {
-                if wakup_time.get() <= now {
-                    k.unblock_task(tid)
-                }
-            }
-        }
-
-        // software watchdog monitoring - ONLY FOR READY TASKS
-        for tid in k.ready().iter() {
-            k.wdt_check(tid);
-        }
+        k.on_tick();
     });
 
     SCB::set_pendsv(); // handle switch in PendSV

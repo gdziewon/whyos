@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use whyos_demo::{check, harness, TestResult};
+use whyos_demo::{check, harness, TestResult, hal};
 
 static TASK_ARG: whyos::Mutex<u32> = whyos::Mutex::new(0);
 
@@ -35,13 +35,13 @@ extern "C" fn takes_ptr_mut(a: *mut u32) {
 }
 
 fn test_static_mut() -> TestResult {
-    let buf_idx1 = 4;
-    let buffer: &'static mut [u32; 3] = whyos::cortex_m::singleton!(: [u32; 3] = [1, buf_idx1, 3]).unwrap();
-    whyos::TaskBuilder::with_static_mut(takes_static_mut, buffer).spawn().unwrap();
-    whyos::sleep(10);
+   let buf_idx1 = 4;
+   let buffer: &'static mut [u32; 3] = hal::singleton!(: [u32; 3] = [1, buf_idx1, 3]).unwrap();
+   whyos::TaskBuilder::with_static_mut(takes_static_mut, buffer).spawn().unwrap();
+   whyos::sleep(10);
 
-    check!(*(TASK_ARG.lock()) == buf_idx1);
-    Ok(())
+   check!(*(TASK_ARG.lock()) == buf_idx1);
+   Ok(())
 }
 
 extern "C" fn takes_static_mut(a: &'static mut [u32; 3]) {

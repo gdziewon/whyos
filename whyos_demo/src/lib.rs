@@ -6,6 +6,9 @@ pub mod img;
 #[cfg(feature = "shell")]
 pub mod shell;
 
+#[cfg(feature = "shell")]
+pub mod uart; // we might want to add uart logging  if i dont resolve rtt isues on riscv
+
 pub use rp235x_hal as hal;
 
 use defmt_rtt as _; // init rtt
@@ -108,7 +111,7 @@ macro_rules! harness {
                 .spawn()
                 .unwrap();
 
-            unsafe { whyos::start(&mut board.syst, board.sys_freq / 1000); }
+            unsafe { whyos::start(board.sys_freq / 1000); }
         }
     };
 }

@@ -1,7 +1,6 @@
 extern crate whyos; // for exception macro to work
 
-use rp235x_hal as hal;
-use hal::{binary_info, block::ImageDef};
+use crate::hal::{binary_info, block::ImageDef};
 
 
 #[unsafe(link_section = ".start_block")]
