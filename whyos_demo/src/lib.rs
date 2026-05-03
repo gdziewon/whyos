@@ -102,7 +102,7 @@ macro_rules! harness {
 
         #[$crate::hal::entry]
         fn main() -> ! {
-            let mut board = $crate::board::Board::init();
+            let board = $crate::board::Board::init();
 
             whyos::TaskBuilder::new(runner)
                 .priority(1)
@@ -111,7 +111,7 @@ macro_rules! harness {
                 .spawn()
                 .unwrap();
 
-            unsafe { whyos::start(board.sys_freq / 1000); }
+            unsafe { whyos::start(1000); }
         }
     };
 }
