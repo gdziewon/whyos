@@ -57,7 +57,7 @@ fn test_starvation() -> TestResult {
     let high_cnt = COUNTER_B.load(Ordering::Relaxed);
 
     defmt::info!("high_cnt {}", high_cnt);
-    check!(high_cnt > 3145000, "High priority task didn't run enough"); // it's also for me, to know if performence is degrading
+    check!(high_cnt > 3730000, "High priority task didn't run enough"); // it's also for me, to know if performence is degrading
     check!(low_cnt == 0, "Low priority task ran! Scheduler failed strict preemption");
 
     unsafe {
@@ -140,9 +140,9 @@ fn test_pingpong() -> TestResult {
     let pong = whyos::spawn_with_priority(pong, 7).unwrap();
 
     whyos::sleep(100);
-    defmt::info!("Ping pong sum: {}",
-        COUNTER_PING.load(Ordering::Relaxed) + COUNTER_PONG.load(Ordering::Relaxed)
-    );
+    let sum = COUNTER_PING.load(Ordering::Relaxed) + COUNTER_PONG.load(Ordering::Relaxed);
+    defmt::info!("Ping pong sum: {}", sum);
+    check!(sum > 61600, "Lost some performence");
 
     unsafe {
         kill(ping).unwrap();

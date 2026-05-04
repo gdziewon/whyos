@@ -2,7 +2,7 @@ MEMORY {
     /*
      * The RP2350 has either external or internal flash.
      *
-     * 2 MiB is a safe default here, although a Pico 2 has 4 MiB.
+     * Pico 2 has 4 MiB.
      */
     FLASH : ORIGIN = 0x10000000, LENGTH = 4096K
     /*

@@ -17,6 +17,7 @@ impl<T: ErrorType + Write> Writer for T {}
 const HELP_MSG: &str = "\
 Commands:\r
   help|h|?                    Show this help message\r
+  name|n                      Print build name\r
   ps|p                        List all tasks\r
   uptime|u                    Show system uptime in ticks\r
   info|i <id>                 Show detailed task information\r
@@ -42,6 +43,7 @@ pub struct Program {
 
 enum Command<'a> {
     Help,
+    Name,
     Reboot,
     Uptime,
     Ps,

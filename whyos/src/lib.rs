@@ -162,3 +162,8 @@ pub fn wdt_feed() {
 pub fn reboot() -> ! {
     arch::reset();
 }
+
+#[inline]
+pub const fn build_name() -> &'static str {
+    env!("WHYOS_BUILD_IDENT")
+}

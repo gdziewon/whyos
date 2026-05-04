@@ -6,6 +6,7 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
     match cmd {
         Command::Empty => (),
         Command::Help => print(writer, HELP_MSG),
+        Command::Name => fprint(writer, format_args!("{}\r\n", whyos::build_name())),
         Command::Reboot => {
             print(writer, "Rebooting system...\r\n");
             whyos::reboot()

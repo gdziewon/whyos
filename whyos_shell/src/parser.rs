@@ -12,6 +12,7 @@ pub fn parse(text: &str) -> Command<'_> {
 
     match cmd {
         "help" | "h" | "?" => Command::Help,
+        "name" | "n" => Command::Name,
         "reboot" => Command::Reboot,
         "uptime" | "u" => Command::Uptime,
         "ps" | "p" => Command::Ps,
