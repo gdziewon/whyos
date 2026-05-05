@@ -18,5 +18,5 @@ pub use table::TaskTable;
 pub use tcb::{Tcb, Watchdog};
 
 pub(crate) extern "C" fn task_exit_trampoline() -> ! {
-	unsafe { crate::exit() }
+	crate::exit()
 }

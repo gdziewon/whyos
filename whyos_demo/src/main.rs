@@ -36,5 +36,5 @@ fn main() -> ! {
     whyos_demo::shell::init_shell(board.uart);
 
     info!("Starting WhyOS...");
-    unsafe { whyos::start(1000); }
+    whyos::start(1000); // todo add some Freq struct maybe
 }

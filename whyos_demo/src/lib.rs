@@ -111,7 +111,7 @@ macro_rules! harness {
                 .spawn()
                 .unwrap();
 
-            unsafe { whyos::start(1000); }
+            whyos::start(1000);
         }
     };
 }

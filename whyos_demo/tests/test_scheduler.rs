@@ -60,10 +60,8 @@ fn test_starvation() -> TestResult {
     check!(high_cnt > 3730000, "High priority task didn't run enough"); // it's also for me, to know if performence is degrading
     check!(low_cnt == 0, "Low priority task ran! Scheduler failed strict preemption");
 
-    unsafe {
-        kill(low_prio_tid).unwrap();
-        kill(high_prio_tid).unwrap();
-    }
+    kill(low_prio_tid).unwrap();
+    kill(high_prio_tid).unwrap();
 
     Ok(())
 }
@@ -105,12 +103,10 @@ fn test_fairness() -> TestResult {
     check!(min > 0, "One or more tasks starved");
     check!(max < min * 2, "Unfair scheduling");
 
-    unsafe {
-        kill(r1).unwrap();
-        kill(r2).unwrap();
-        kill(r3).unwrap();
-        kill(r4).unwrap();
-    }
+    kill(r1).unwrap();
+    kill(r2).unwrap();
+    kill(r3).unwrap();
+    kill(r4).unwrap();
 
     Ok(())
 }
@@ -144,10 +140,8 @@ fn test_pingpong() -> TestResult {
     defmt::info!("Ping pong sum: {}", sum);
     check!(sum > 61600, "Lost some performence");
 
-    unsafe {
-        kill(ping).unwrap();
-        kill(pong).unwrap();
-    }
+    kill(ping).unwrap();
+    kill(pong).unwrap();
 
     Ok(())
 }

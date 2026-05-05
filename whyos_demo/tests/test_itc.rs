@@ -62,7 +62,7 @@ fn test_exit_with_mutex() -> TestResult {
 
 extern "C" fn exit_holder() {
     let _g = EXIT_MUTEX.lock();
-    unsafe { whyos::exit() };
+    whyos::exit()
 }
 
 static SEM_COUNT: Semaphore = Semaphore::new(0, 3);

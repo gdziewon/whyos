@@ -13,7 +13,7 @@ fn panic(info: &PanicInfo) -> ! {
         if let Some(tid) = Kernel::lock(|k| k.current_task()) {
             defmt::warn!("WhyOS: Task {} panicked: {}", tid.id(), info);
 
-            unsafe { let _ = kill(tid); }
+            let _ = kill(tid);
             yield_cpu();
 
             loop {

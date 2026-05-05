@@ -42,9 +42,3 @@ pub fn reap_zombies() -> usize {
 
     reaped_size
 }
-
-pub fn init_idle_task() { // idle task is ran when every other task can't
-    Kernel::lock(|k| {
-        k.init_idle();
-    });
-}

@@ -91,7 +91,7 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
         }
 
         Command::Kill(tid) => {
-            match unsafe { whyos::kill(tid) } {
+            match whyos::kill(tid) {
                 Ok(_) => fprint(writer, format_args!("Task {} killed\r\n", tid.id())),
                 Err(_) => fprint(writer, format_args!("Failed to kill task {}\r\n", tid.id())),
             }

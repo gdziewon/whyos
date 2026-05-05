@@ -71,11 +71,11 @@ impl Drop for AllocatedMemory {
 unsafe impl Send for AllocatedMemory {}
 
 // rounds up the size to multiple of 1024 (kb)
-pub fn alloc(size: usize) -> Option<AllocatedMemory> { // todo: return a Result?
+pub fn alloc(size: usize) -> Option<AllocatedMemory> {
     let blocks = size.div_ceil(BLOCK_SIZE);
 
     if blocks == 0 || blocks > POOL_SIZE {
-        return None; // todo: return result here?
+        return None;
     }
 
     critical_section::with(|cs| {

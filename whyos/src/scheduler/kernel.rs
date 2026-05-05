@@ -17,7 +17,7 @@ pub struct Kernel {
     allocated: TaskMap, // who exists
     ready: TaskMap, // wants CPU
     blocked: TaskMap, // waiting for time
-    zombies: TaskMap, // waiting to die
+    zombies: TaskMap, // waiting to die // todo: we might not need this
 }
 
 impl Kernel {
@@ -49,7 +49,8 @@ impl Kernel {
     pub fn blocked(&self) -> TaskMap { self.blocked }
     pub fn zombies(&self) -> TaskMap { self.zombies }
 
-    pub fn tick(&mut self) -> u64 {
+    #[inline(always)]
+    fn tick(&mut self) -> u64 {
         self.system_ticks += 1;
         self.system_ticks
     }

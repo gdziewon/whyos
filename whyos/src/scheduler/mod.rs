@@ -2,10 +2,11 @@ mod idle;
 mod kernel;
 mod panic;
 
-use core::cell::RefCell;
+use core::{cell::RefCell, sync::atomic::AtomicBool};
 
 use critical_section::Mutex;
 pub use kernel::{Kernel, MAX_TASKS, TaskMask};
+
 
 static KERNEL: Mutex<RefCell<Kernel>> = Mutex::new(RefCell::new(Kernel::new()));
 
@@ -26,6 +27,16 @@ impl Kernel {
             } else {
                 None
             }
+        })
+    }
+
+    pub fn init() {
+        static KERNEL_RUNNING: AtomicBool = AtomicBool::new(false);
+        if KERNEL_RUNNING.swap(true, core::sync::atomic::Ordering::SeqCst) {
+            panic!("WhyOS: Kernel already initialized");
+        }
+        Kernel::lock(|k| {
+            k.init_idle();
         })
     }
 }

@@ -37,7 +37,7 @@ fn test_suspend_resume() -> TestResult {
 
     check!(val_after > val_suspended, "Worker didnt resume: suspended={}, after={}", val_suspended, val_after);
 
-    unsafe { kill(tid).unwrap() };
+    kill(tid).unwrap();
     Ok(())
 }
 
@@ -71,7 +71,7 @@ fn test_reincarnation() -> TestResult {
 }
 
 extern "C" fn worker_die() {
-    unsafe { whyos::exit() }; // safe, we dont allocate anything that needs to be cleaned
+    whyos::exit()
 }
 
 // Tests how Mutex will handle suspended, waiting for lock task with high prio
@@ -187,9 +187,7 @@ fn test_kill_task() -> TestResult {
     let before_kill = KILL_COUNTER.load(Ordering::Relaxed);
     check!(before_kill > 0, "Kill worker did not start");
 
-    unsafe {
-        whyos::kill(tid).unwrap();
-    }
+    whyos::kill(tid).unwrap();
 
     let info = whyos::task_info(tid).unwrap();
     check!(matches!(info.state, whyos::TaskState::Zombie), "Task state is not Zombie after kill, got {:?}", info.state);

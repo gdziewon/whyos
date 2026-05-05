@@ -21,19 +21,25 @@ use crate::scheduler::{ContextSwitch, Kernel};
 use crate::task::ops;
 
 // TODO: FIGURE OUT which ones are safe to call in MSP mode
+// todov2: implement task handle
 
 
-/// # Safety
-/// Should only be called once by "main"
-pub unsafe fn start(freq: u32) -> ! { // todo: disable interrupts here?
-    task::ops::init_idle_task(); // todo: they shouldn't be called here, but after the svc call
+/// Starts the WhyOS kernel and begins task scheduling.
+///
+/// # Panics
+/// This function enforces strict one-shot initialization. It will `panic!` if
+/// called more than once to prevent hardware and kernel state corruption.
+///
+/// # Arguments
+/// * `freq` - The system tick frequency in Hertz (Hz).
+pub fn start(freq: u32) -> ! {
+    Kernel::init();
     unsafe { arch::start_os(freq) }
 }
 
 #[inline] pub fn spawn(entry: TaskRoutine) -> WhyResult<TaskId> { TaskBuilder::new(entry).spawn() }
 #[inline] pub fn spawn_with_priority(entry: TaskRoutine, priority: u8) -> WhyResult<TaskId> { TaskBuilder::new(entry).priority(priority).spawn() }
 
-// todo: they all should probably return a Result
 #[inline]
 pub fn yield_cpu() {
     scheduler::yield_now();
@@ -51,23 +57,26 @@ pub fn sleep(ticks: u64) {
     scheduler::yield_now();
 }
 
-/// # Safety
-/// Calling this function will immediately terminate the task and reclaim its memory
-/// however it will NOT run any "Drop" implementations for variables currently in scope
+/// Terminates the current task and reclaims its memory.
 ///
-/// To ensure everything gets cleaned up, tasks should simply return from their entry point
+/// **WARNING:** This function does NOT run destructors. If the task
+/// holds a locked `Mutex` or other shared resources, they will remain
+/// locked forever.
 #[inline]
-pub unsafe fn exit() -> ! {
+pub fn exit() -> ! {
     let curr = current_tid();
     Kernel::lock(|k| k.make_zombie(curr).unwrap());
     scheduler::yield_now();
     loop {}
 }
 
-/// # Safety
-/// Same as exit()
+/// Immediately kills the specified task and reclaims its memory.
+///
+/// **WARNING:** This function does NOT run destructors. If the task
+/// holds a locked `Mutex` or other shared resources, they will remain
+/// locked forever.
 #[inline]
-pub unsafe fn kill(tid: TaskId) -> WhyResult<()> {
+pub fn kill(tid: TaskId) -> WhyResult<()> {
     let switch = Kernel::lock(|k| k.make_zombie(tid))?;
     if switch == ContextSwitch::Yield {
         scheduler::yield_now();

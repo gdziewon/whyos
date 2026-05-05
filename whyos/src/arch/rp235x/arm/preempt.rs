@@ -19,18 +19,16 @@ extern "C" fn switch_task(old_sp: usize) -> usize {
 #[unsafe(naked)]
 pub unsafe extern "C" fn PendSV() {
     naked_asm!(
-        // tells the assembler that we are using fpu
-        ".fpu fpv5-sp-d16",
+        ".fpu fpv5-sp-d16", // tells the assembler that we are using fpu
 
         // load OLD sp to r0
         "mrs r0, psp",
-        "isb",      // sync, mostly deffensive here
 
         // check if OLD task is using FPU
         // '!' updates r0
         "tst lr, #0x10",             // test bit 4 (identifies FPU usage)
         "it eq",                     // if FPU is enabled... (bit 4 == 0)
-        "vstmdbeq r0!, {{s16-s31}}", // save s16-s31, update r0 (OLD sp) /// ARCH: this is specific for cortex_m33, it requires FPU
+        "vstmdbeq r0!, {{s16-s31}}", // save s16-s31, update r0 (OLD sp) /// fixme -> ARCH: \hw specific, uses fpu
 
         // push OLD tasks regs r4-r11 + lr, update r0 (OLD sp)
         "stmdb r0!, {{r4-r11, lr}}",
@@ -49,9 +47,7 @@ pub unsafe extern "C" fn PendSV() {
         "it eq",                     // if FPU is enabled... (bit 4 == 0)
         "vldmiaeq r0!, {{s16-s31}}", // pop s16-s31, update r0 (NEW sp)
 
-        // update actual sp to NEW task's one
-        "msr psp, r0",
-        "isb",      // pipeline flush, ensures CPU uses new stack ptr
+        "msr psp, r0", // update actual sp to NEW task's one
 
         // exception return using NEW task's lr, so CPU knows wether to unstack FPU regs
         "bx lr",
