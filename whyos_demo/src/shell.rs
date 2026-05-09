@@ -40,12 +40,12 @@ extern "C" fn prog_counter(mut count: usize) {
 }
 
 extern "C" fn prog_timer(mut ticks: usize) {
-    let tid = whyos::current_tid();
+    let tid = whyos::my_handle().as_u32();
     while ticks > 0 {
         ticks -= 1;
         whyos::sleep(1);
     }
-    uprintln!("TIMER{} DONE", tid.id());
+    uprintln!("TIMER{} DONE", tid);
 }
 
 extern "C" fn prog_panic(_: usize) {

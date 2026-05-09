@@ -26,11 +26,6 @@ impl TaskMap {
     }
 
     #[inline]
-    pub fn ones(&self) -> usize {
-        self.0.ones()
-    }
-
-    #[inline]
     pub fn first_free(&self) -> Option<TaskId> {
         self.0.first_unset().map(|tid| unsafe { TaskId::new_unchecked(tid) })
     }

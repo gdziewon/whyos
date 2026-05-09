@@ -9,7 +9,7 @@ use heapless::String;
 use embedded_io::{Write, ErrorType};
 use core::fmt::{self};
 
-use whyos::{Queue, StackSize, TaskId, TaskRoutineArg};
+use whyos::{Queue, StackSize, TaskHandle, TaskRoutineArg};
 
 pub trait Writer: ErrorType + Write {}
 impl<T: ErrorType + Write> Writer for T {}
@@ -47,10 +47,10 @@ enum Command<'a> {
     Reboot,
     Uptime,
     Ps,
-    TaskInfo(TaskId),
-    Suspend(TaskId),
-    Resume(TaskId),
-    Kill(TaskId),
+    TaskInfo(TaskHandle),
+    Suspend(TaskHandle),
+    Resume(TaskHandle),
+    Kill(TaskHandle),
     Execute(&'a str, Option<usize>),
     List,
     Invalid(&'a str),

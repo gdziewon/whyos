@@ -1,6 +1,6 @@
 use core::num::NonZero;
 
-use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskId, TaskMap, TaskStack, TaskTable, Tcb, Watchdog}};
+use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskHandle, TaskId, TaskMap, TaskRegistry, TaskStack, Tcb, Watchdog}};
 
 use super::idle::IdleTask;
 
@@ -8,13 +8,12 @@ pub type TaskMask = u32; // FIXME: right now, it can't go above u32, because of 
 pub const MAX_TASKS: usize = TaskMask::BITS as usize;
 
 pub struct Kernel {
-    tasks: TaskTable,
+    registry: TaskRegistry,
     current_task: Option<TaskId>,
     system_ticks: u64,
     timer_interval: u32, // todo: should it be an option?
     idle: Option<IdleTask>,
 
-    allocated: TaskMap, // who exists
     ready: TaskMap, // wants CPU
     blocked: TaskMap, // waiting for time
     zombies: TaskMap, // waiting to die // todo: we might not need this
@@ -23,19 +22,17 @@ pub struct Kernel {
 impl Kernel {
     pub const fn new() -> Self {
         Self {
-            tasks: TaskTable::new(),
+            registry: TaskRegistry::new(),
             current_task: None,
             system_ticks: 0,
             timer_interval: 0,
             idle: None,
-            allocated: TaskMap::new(),
             ready: TaskMap::new(),
             blocked: TaskMap::new(),
             zombies: TaskMap::new(),
         }
     }
 
-    pub fn task(&self, tid: TaskId) -> &Tcb { &self.tasks[tid] }
     pub fn current_task(&self) -> Option<TaskId> { self.current_task }
     pub fn system_ticks(&self) -> u64 { self.system_ticks }
     pub fn set_timer_interval(&mut self, interval: u32) { self.timer_interval = interval }
@@ -44,10 +41,11 @@ impl Kernel {
         self.idle.as_ref().expect("WhyOS: idle task not initialized").sp()
     }
 
-    pub fn allocated(&self) -> TaskMap { self.allocated }
-    pub fn ready(&self) -> TaskMap { self.ready }
-    pub fn blocked(&self) -> TaskMap { self.blocked }
-    pub fn zombies(&self) -> TaskMap { self.zombies }
+    pub fn allocated(&self) -> TaskMap { self.registry.allocated_map() }
+    pub fn handle(&self, tid: TaskId) -> WhyResult<TaskHandle> { self.registry.handle(tid) }
+    pub fn task(&self, h: &TaskHandle) -> WhyResult<&Tcb> { self.registry.get_task(&h) }
+    pub unsafe fn task_unchecked(&self, tid: TaskId) -> &Tcb { self.registry.get_task_unchecked(tid) }
+
 
     #[inline(always)]
     fn tick(&mut self) -> u64 {
@@ -60,7 +58,7 @@ impl Kernel {
 
         // wake up sleeping tasks
         for tid in self.blocked.iter() {
-            let task = self.task(tid);
+            let task = self.registry.get_task_mut_unchecked(tid);
 
             if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state {
                 if wakup_time.get() <= now {
@@ -70,7 +68,7 @@ impl Kernel {
         }
 
         // software watchdog monitoring - ONLY FOR READY TASKS
-        for tid in self.ready.iter() {
+        for tid in self.ready.iter() { // todo: watchdog should be behind feature
             self.wdt_check(tid);
         }
 
@@ -78,7 +76,7 @@ impl Kernel {
     }
 
     fn wdt_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
-        let task = &mut self.tasks[tid];
+        let task = self.registry.get_task_mut_unchecked(tid);
 
         if let Some(watchdog) = task.watchdog.as_mut() {
             if watchdog.check_n_tick() {
@@ -86,33 +84,31 @@ impl Kernel {
                     "WhyOS: Task {} didn't feed the watchdog for {} ticks - killing it",
                     tid.id(), watchdog.interval()
                 );
-                self.make_zombie(tid).unwrap();
+                self.make_zombie(tid);
             }
         }
     }
 
     pub fn wdt_sub(&mut self, tid: TaskId, interval: NonZero<u64>) {
-        let task = &mut self.tasks[tid];
-
+        let task = self.registry.get_task_mut_unchecked(tid);
         task.watchdog = Some(Watchdog::new(interval));
     }
 
     pub fn wdt_unsub(&mut self, tid: TaskId) {
-        let task = &mut self.tasks[tid];
-
+        let task = self.registry.get_task_mut_unchecked(tid);
         task.watchdog = None;
     }
 
     pub fn wdt_feed(&mut self, tid: TaskId) {
-        let task = &mut self.tasks[tid];
-
+        let task = self.registry.get_task_mut_unchecked(tid);
         if let Some(watchdog) = task.watchdog.as_mut() {
             watchdog.feed();
         }
     }
 
     pub fn block_task(&mut self, tid: TaskId, reason: BlockReason) -> ContextSwitch {
-        self.tasks[tid].state = TaskState::Blocked(reason);
+        let task = self.registry.get_task_mut_unchecked(tid);
+        task.state = TaskState::Blocked(reason);
         self.blocked.add(tid);
         self.ready.remove(tid);
 
@@ -120,7 +116,7 @@ impl Kernel {
     }
 
     pub fn unblock_task(&mut self, tid: TaskId) {
-        let task = &mut self.tasks[tid];
+        let task = self.registry.get_task_mut_unchecked(tid);
 
         if let TaskState::Blocked { .. } = task.state {
             task.state = TaskState::Ready;
@@ -140,12 +136,13 @@ impl Kernel {
         self.block_task(tid, BlockReason::Sleep(wakeup_time)) // self-sleep
     }
 
-    pub fn suspend_task(&mut self, tid: TaskId) -> WhyResult<ContextSwitch> {
-        if !self.allocated.is_set(tid) {
-            return Err(WhyError::InvalidTaskId);
-        }
 
-        let task = &mut self.tasks[tid];
+    /// COLD PATH with handles
+    pub fn suspend_task(&mut self, h: &TaskHandle) -> WhyResult<ContextSwitch> {
+        let task = self.registry.get_task_mut(&h)?;
+        if task.state == TaskState::Zombie { // shouldn't suspend zombies
+             return Err(WhyError::InvalidHandle);
+        }
 
         // already suspended
         if let TaskState::Suspended(_) = task.state {
@@ -155,18 +152,19 @@ impl Kernel {
         let ctx: ResumeContext = task.state.try_into()?;
         task.state = TaskState::Suspended(ctx);
 
-        self.ready.remove(tid);
-        self.blocked.remove(tid);
+        self.ready.remove(h.tid());
+        self.blocked.remove(h.tid());
 
-        Ok(ContextSwitch::yield_if(self.current_task == Some(tid))) // self-suspend
+        Ok(ContextSwitch::yield_if(self.current_task == Some(h.tid()))) // self-suspend
     }
 
-    pub fn resume_task(&mut self, tid: TaskId) -> WhyResult<ContextSwitch> {
-        if !self.allocated.is_set(tid) {
-            return Err(WhyError::InvalidTaskId);
-        }
+    pub fn resume_task(&mut self, h: &TaskHandle) -> WhyResult<ContextSwitch> {
+        let task = self.registry.get_task_mut(h)?;
+        let tid = h.tid();
 
-        let task = &mut self.tasks[tid];
+        if task.state == TaskState::Zombie { // shouldn't resume zombies
+             return Err(WhyError::InvalidHandle);
+        }
 
         let TaskState::Suspended(ctx) = task.state else {
             return Ok(ContextSwitch::Continue);
@@ -202,28 +200,18 @@ impl Kernel {
         name: Option<&'static str>,
         priority: u8,
         stack: TaskStack
-    ) -> WhyResult<TaskId> {
+    ) -> WhyResult<TaskHandle> {
 
-        let tid = self.allocated
-            .first_free()
-            .ok_or(WhyError::MaxTasksReached)?;
+        let handle = self.registry.allocate(name, priority, stack)?;
 
-        self.init_task(tid, name, priority, stack);
+        self.ready.add(handle.tid());
 
-        Ok(tid)
+        Ok(handle)
     }
 
-    pub fn init_task(
-        &mut self,
-        tid: TaskId,
-        name: Option<&'static str>,
-        priority: u8,
-        stack: TaskStack
-    ) {
-        self.allocated.add(tid); // TODO: create some set_state() method that handles all of these changes
-        self.ready.add(tid);
-
-        self.tasks[tid] = Tcb::ready(name, priority, stack);
+    pub fn kill_task(&mut self, h: &TaskHandle) -> WhyResult<ContextSwitch> {
+        let tid = self.registry.validate(&h)?;
+        Ok(self.make_zombie(tid))
     }
 
     pub fn init_idle(&mut self) {
@@ -234,35 +222,29 @@ impl Kernel {
         self.idle = Some(IdleTask::new());
     }
 
-    pub fn make_zombie(&mut self, tid: TaskId) -> WhyResult<ContextSwitch> {
-        if !self.allocated.is_set(tid) {
-            return Err(WhyError::InvalidTaskId);
-        }
+    pub fn make_zombie(&mut self, tid: TaskId) -> ContextSwitch {
         self.ready.remove(tid);
         self.blocked.remove(tid);
-
         self.zombies.add(tid);
-        self.tasks[tid].state = TaskState::Zombie;
 
-        Ok(ContextSwitch::yield_if(self.current_task == Some(tid))) // self-remove
+        let task = self.registry.get_task_mut_unchecked(tid);
+        task.state = TaskState::Zombie;
+
+        ContextSwitch::yield_if(self.current_task == Some(tid)) // self-remove
     }
 
-    pub fn remove_zombie(&mut self, tid: TaskId) -> Option<TaskStack> {
-        if let Some(stack) = self.tasks[tid].stack.take() {
+    pub fn reap_zombies(&mut self) {
+        for tid in self.zombies.iter() {
             self.zombies.remove(tid);
-            self.allocated.remove(tid);
-
-            self.tasks[tid] = Tcb::dead();
-            Some(stack)
-        } else {
-            None
+            let _ = self.registry.deallocate(tid);
         }
     }
 
-    // returns SP of new task
+    // returns SP of new taskget_task_mut_unchecked
     pub fn schedule(&mut self, old_sp: usize) -> usize {
         if let Some(curr) = self.current_task {
-            if let Some(stack) = self.tasks[curr].stack.as_mut() {
+            let curr_task = self.registry.get_task_mut_unchecked(curr);
+            if let Some(stack) = curr_task.stack.as_mut() {
                 if !stack.check_canary() {
                     panic!("KERNEL PANIC: Stack Overflow detected in Task {}", curr.id());
                 }
@@ -271,8 +253,8 @@ impl Kernel {
             }
 
             // to not overwrite Blocked etc
-            if self.tasks[curr].state == TaskState::Running {
-                self.tasks[curr].state = TaskState::Ready;
+            if curr_task.state == TaskState::Running {
+                curr_task.state = TaskState::Ready;
             }
         } else {
             self.idle.as_mut().expect("WhyOS: idle task not initialized").set_sp(old_sp);
@@ -282,12 +264,12 @@ impl Kernel {
         self.current_task = next_task;
 
         if let Some(next_task) = next_task {
-            self.tasks[next_task].state = TaskState::Running; // we assume that all tasks in ready are Ready
+            let next_task = self.registry.get_task_mut_unchecked(next_task);
+            next_task.state = TaskState::Running; // we assume that all tasks in ready are Ready
 
-            // TODO: MAKE ABSOLUTE SURE IF THIS IS SAFE
-            // Should be safe, task in ready array mustn't be dead
+            // safe, task in ready array mustn't be dead
             unsafe {
-                self.tasks[next_task].stack.as_ref().unwrap_unchecked().sp()
+                next_task.stack.as_ref().unwrap_unchecked().sp()
             }
         } else {
             self.idle.as_ref().expect("WhyOS: idle task not initialized").sp()
@@ -303,6 +285,6 @@ impl Kernel {
 
         self.ready
             .iter_from(next)
-            .min_by_key(|&tid| self.tasks[tid].priority)
+            .min_by_key(|&tid| self.registry.get_task_unchecked(tid).priority)
     }
 }

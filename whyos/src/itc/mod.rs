@@ -44,10 +44,10 @@ impl WaitQueue {
                 .iter()
                 .filter(|&tid|
                     matches!(
-                        k.task(tid).state, TaskState::Blocked(BlockReason::WaitQueue)
+                        unsafe {k.task_unchecked(tid).state}, TaskState::Blocked(BlockReason::WaitQueue)
                     )
                 ) // only wake tasks that are actually blocked by ITC (to avoid lost wakeup problem)
-                .min_by_key(|&tid| k.task(tid).priority);
+                .min_by_key(|&tid| unsafe { k.task_unchecked(tid).priority });
 
             if let Some(tid) = best_task {
                 self.waiting.remove(tid);

@@ -49,7 +49,7 @@ fn parse_exec<'a>(args: &'a str) -> Command<'a> {
 
 fn parse_id<F>(args: &str, usage: &'static str, constructor: F) -> Command<'static>
 where
-    F: FnOnce(whyos::TaskId) -> Command<'static>
+    F: FnOnce(whyos::TaskHandle) -> Command<'static>
 {
     let args = args.trim();
     if args.is_empty() {
@@ -57,7 +57,7 @@ where
     }
 
     if let Ok(id) = args.parse::<usize>() {
-        if let Ok(tid) = whyos::TaskId::new(id) {
+        if let Some(tid) = whyos::TaskHandle::from_u32(id as u32) {
             return constructor(tid);
         } else {
             return Command::Invalid("Error: Invalid Task ID");

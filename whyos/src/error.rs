@@ -8,4 +8,5 @@ pub enum WhyError {
     InvalidOperation = 3,
     InvalidTaskId = 4,
     InternalError = 5,
+    InvalidHandle = 6
 }

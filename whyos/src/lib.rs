@@ -9,20 +9,18 @@ mod error;
 mod utils;
 
 pub use itc::{Mutex, Queue, Semaphore};
-pub use task::{TaskId, TaskBuilder, TaskInfo, StackSize};
-pub use task::{TaskRoutine, TaskRoutineArg, TaskState, ResumeContext};
+pub use task::{TaskBuilder, TaskInfo, StackSize};
+pub use task::{TaskRoutine, TaskRoutineArg, TaskState, ResumeContext, TaskHandle};
 pub use scheduler::MAX_TASKS;
 pub use error::WhyError;
 
 use core::num::NonZero;
 
 use error::WhyResult;
-use crate::scheduler::{ContextSwitch, Kernel};
-use crate::task::ops;
+use crate::scheduler::Kernel;
+use crate::task::{TaskId};
 
 // TODO: FIGURE OUT which ones are safe to call in MSP mode
-// todov2: implement task handle
-
 
 /// Starts the WhyOS kernel and begins task scheduling.
 ///
@@ -37,8 +35,8 @@ pub fn start(freq: u32) -> ! {
     unsafe { arch::start_os(freq) }
 }
 
-#[inline] pub fn spawn(entry: TaskRoutine) -> WhyResult<TaskId> { TaskBuilder::new(entry).spawn() }
-#[inline] pub fn spawn_with_priority(entry: TaskRoutine, priority: u8) -> WhyResult<TaskId> { TaskBuilder::new(entry).priority(priority).spawn() }
+#[inline] pub fn spawn(entry: TaskRoutine) -> WhyResult<TaskHandle> { TaskBuilder::new(entry).spawn() }
+#[inline] pub fn spawn_with_priority(entry: TaskRoutine, priority: u8) -> WhyResult<TaskHandle> { TaskBuilder::new(entry).priority(priority).spawn() }
 
 #[inline]
 pub fn yield_cpu() {
@@ -65,48 +63,23 @@ pub fn sleep(ticks: u64) {
 #[inline]
 pub fn exit() -> ! {
     let curr = current_tid();
-    Kernel::lock(|k| k.make_zombie(curr).unwrap());
+    Kernel::lock(|k| k.make_zombie(curr));
     scheduler::yield_now();
     loop {}
 }
 
-/// Immediately kills the specified task and reclaims its memory.
-///
-/// **WARNING:** This function does NOT run destructors. If the task
-/// holds a locked `Mutex` or other shared resources, they will remain
-/// locked forever.
 #[inline]
-pub fn kill(tid: TaskId) -> WhyResult<()> {
-    let switch = Kernel::lock(|k| k.make_zombie(tid))?;
-    if switch == ContextSwitch::Yield {
-        scheduler::yield_now();
-    }
-    Ok(())
-}
-
-#[inline]
-pub fn suspend(tid: TaskId) -> WhyResult<()> {
-    let switch = Kernel::lock(|k| k.suspend_task(tid))?;
-    if switch == ContextSwitch::Yield {
-        scheduler::yield_now();
-    }
-    Ok(())
-}
-
-#[inline]
-pub fn resume(tid: TaskId) -> WhyResult<()> {
-    let switch = Kernel::lock(|k| k.resume_task(tid))?;
-    if switch == ContextSwitch::Yield {
-        scheduler::yield_now();
-    }
-    Ok(())
-}
-
-#[inline]
-pub fn current_tid() -> TaskId {
+fn current_tid() -> TaskId { // todo: remove it maybe
     Kernel::lock(|k| k.current_task()
         .expect("WhyOS: no current task")
     )
+}
+
+pub fn my_handle() -> TaskHandle {
+    let curr = current_tid();
+    Kernel::lock(|k| {
+        k.handle(curr).expect("WhyOS: Current task invalid")
+    })
 }
 
 #[inline]
@@ -115,30 +88,14 @@ pub fn uptime_ticks() -> u64 {
 }
 
 #[inline]
-pub fn task_count() -> usize {
-    Kernel::lock(|k| k.allocated().ones())
+pub fn allocated() -> impl Iterator<Item = TaskHandle> {
+    let map = Kernel::lock(|k| k.allocated());
+    map.iter().filter_map(|tid| Kernel::lock(|k| k.handle(tid).ok()))
 }
 
 #[inline]
-pub fn allocated_tasks() -> impl Iterator<Item = TaskId> {
-    Kernel::lock(|k| k.allocated().iter())
-}
-
-#[inline]
-pub fn task_info(tid: TaskId) -> WhyResult<TaskInfo> {
-    Kernel::lock(|k| {
-        if !k.allocated().is_set(tid) {
-            return Err(WhyError::InvalidTaskId);
-        }
-
-        let task = k.task(tid);
-        TaskInfo::new(tid, task)
-    })
-}
-
-#[inline]
-pub fn reclaim_memory() -> usize {
-    ops::reap_zombies()
+pub fn reclaim_memory() {
+    Kernel::lock(|k| k.reap_zombies())
 }
 
 #[inline]

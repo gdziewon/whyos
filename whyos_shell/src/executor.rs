@@ -21,16 +21,15 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
             print(writer, " ID | State     | Stack(Peak/Total) | Name\r\n");
             print(writer, "────+───────────+───────────────────+──────────────\r\n");
 
-            for tid in whyos::allocated_tasks() {
-                if let Ok(info) = whyos::task_info(tid) {
+            for handle in whyos::allocated() {
+                if let Ok(info) = handle.info() {
                     let name = info.name.unwrap_or("-");
 
-                    // todo: guard again div by 0?
                     let pct = (info.max_stack_usage * 100) / info.stack_size;
 
                     fprint(writer, format_args!(
-                        " {:>2} | {:<9} | {:>4} / {:<4} ({:>2}%) | {}\r\n",
-                        info.tid.id(),
+                        " {:>4} | {:<9} | {:>4} / {:<4} ({:>2}%) | {}\r\n",
+                        info.handle.as_u32(),
                         info.state,
                         info.max_stack_usage,
                         info.stack_size,
@@ -41,8 +40,8 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
             }
         }
 
-        Command::TaskInfo(tid) => {
-            match whyos::task_info(tid) {
+        Command::TaskInfo(handle) => {
+            match handle.info() {
                 Ok(info) => {
                     let stack_top = info.stack_base + info.stack_size;
                     let current_usage = stack_top.saturating_sub(info.current_sp);
@@ -60,7 +59,7 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
                         Current Use:  {} bytes\r\n\
                         Peak Usage:   {} bytes ({}%)\r\n\
                         ──────────────────────────────────────────\r\n",
-                        info.tid.id(),
+                        info.handle,
                         info.name.unwrap_or("<unnamed>"),
                         info.state,
                         info.priority,
@@ -76,24 +75,24 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
             }
         }
 
-        Command::Suspend(tid) => {
-            match whyos::suspend(tid) {
-                Ok(_) => fprint(writer, format_args!("Task {} suspended\r\n", tid.id())),
-                Err(_) => fprint(writer, format_args!("Failed to suspend task {}\r\n", tid.id()))
+        Command::Suspend(handle) => {
+            match handle.suspend() {
+                Ok(_) => fprint(writer, format_args!("Task {} suspended\r\n", handle)),
+                Err(_) => fprint(writer, format_args!("Failed to suspend task {}\r\n", handle))
             }
         }
 
-        Command::Resume(tid) => {
-            match whyos::resume(tid) {
-                Ok(_) => fprint(writer, format_args!("Task {} resumed\r\n", tid.id())),
-                Err(_) => fprint(writer, format_args!("Failed to resume task {}\r\n", tid.id()))
+        Command::Resume(handle) => {
+            match handle.resume() {
+                Ok(_) => fprint(writer, format_args!("Task {} resumed\r\n", handle)),
+                Err(_) => fprint(writer, format_args!("Failed to resume task {}\r\n", handle))
             }
         }
 
-        Command::Kill(tid) => {
-            match whyos::kill(tid) {
-                Ok(_) => fprint(writer, format_args!("Task {} killed\r\n", tid.id())),
-                Err(_) => fprint(writer, format_args!("Failed to kill task {}\r\n", tid.id())),
+        Command::Kill(handle) => {
+            match handle.kill() {
+                Ok(_) => fprint(writer, format_args!("Task {} killed\r\n", handle)),
+                Err(_) => fprint(writer, format_args!("Failed to kill task {}\r\n", handle)),
             }
         }
 
@@ -109,7 +108,7 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
                         fprint(writer, format_args!("Couldn't execute '{}', error: {:?}", name, e));
                     }
             } else {
-                fprint(writer, format_args!("Unknown program {}", name));
+                fprint(writer, format_args!("Unknown program: '{}'", name));
             }
         }
 

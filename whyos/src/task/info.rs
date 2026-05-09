@@ -1,11 +1,10 @@
-use crate::{TaskId, WhyError, error::WhyResult, task::Tcb};
+use crate::{WhyError, error::WhyResult, task::{TaskHandle, Tcb}};
 
 use super::state::TaskState;
 
-#[derive(defmt::Format)]
 #[repr(C)]
 pub struct TaskInfo {
-    pub tid: TaskId,
+    pub handle: TaskHandle,
     pub name: Option<&'static str>,
     pub state: TaskState,
     pub priority: u8,
@@ -16,10 +15,10 @@ pub struct TaskInfo {
 }
 
 impl TaskInfo {
-    pub fn new(tid: TaskId, task: &Tcb) -> WhyResult<Self> {
+    pub fn new(handle: TaskHandle, task: &Tcb) -> WhyResult<Self> {
         if let Some(stack) = &task.stack {
             Ok(TaskInfo {
-                tid,
+                handle,
                 name: task.name,
                 state: task.state,
                 priority: task.priority,

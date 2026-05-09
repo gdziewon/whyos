@@ -1,8 +1,8 @@
-use crate::{error::{WhyError, WhyResult}, scheduler::MAX_TASKS};
+use crate::{scheduler::MAX_TASKS};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, defmt::Format)]
 #[repr(transparent)]
-pub struct TaskId(usize);
+pub struct TaskId(usize); // todo: maybe should be u16, but usize is fast
 
 impl TaskId {
     #[inline]
@@ -11,11 +11,11 @@ impl TaskId {
     }
 
     #[inline]
-    pub fn new(id: usize) -> WhyResult<Self> {
+    pub fn new(id: usize) -> Option<Self> {
         if id >= MAX_TASKS {
-            Err(WhyError::InvalidTaskId)
+            None
         } else {
-            Ok(Self(id))
+            Some(Self(id))
         }
     }
 

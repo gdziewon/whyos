@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-use whyos::kill;
 use whyos_demo::{check, harness, TestResult};
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
@@ -47,9 +46,9 @@ fn test_starvation() -> TestResult {
     COUNTER_A.store(0, Ordering::Relaxed);
     COUNTER_B.store(0, Ordering::Relaxed);
 
-    let low_prio_tid = whyos::spawn_with_priority(worker_low, 20).unwrap();
+    let low_h = whyos::spawn_with_priority(worker_low, 20).unwrap();
 
-    let high_prio_tid = whyos::spawn_with_priority(worker_high_hog, 5).unwrap();
+    let high_h = whyos::spawn_with_priority(worker_high_hog, 5).unwrap();
 
     whyos::sleep(200);
 
@@ -60,8 +59,8 @@ fn test_starvation() -> TestResult {
     check!(high_cnt > 3730000, "High priority task didn't run enough"); // it's also for me, to know if performence is degrading
     check!(low_cnt == 0, "Low priority task ran! Scheduler failed strict preemption");
 
-    kill(low_prio_tid).unwrap();
-    kill(high_prio_tid).unwrap();
+    low_h.kill().unwrap();
+    high_h.kill().unwrap();
 
     Ok(())
 }
@@ -103,10 +102,10 @@ fn test_fairness() -> TestResult {
     check!(min > 0, "One or more tasks starved");
     check!(max < min * 2, "Unfair scheduling");
 
-    kill(r1).unwrap();
-    kill(r2).unwrap();
-    kill(r3).unwrap();
-    kill(r4).unwrap();
+    r1.kill().unwrap();
+    r2.kill().unwrap();
+    r3.kill().unwrap();
+    r4.kill().unwrap();
 
     Ok(())
 }
@@ -138,10 +137,10 @@ fn test_pingpong() -> TestResult {
     whyos::sleep(100);
     let sum = COUNTER_PING.load(Ordering::Relaxed) + COUNTER_PONG.load(Ordering::Relaxed);
     defmt::info!("Ping pong sum: {}", sum);
-    check!(sum > 61600, "Lost some performence");
+    check!(sum > 62000, "Lost some performence");
 
-    kill(ping).unwrap();
-    kill(pong).unwrap();
+    ping.kill().unwrap();
+    pong.kill().unwrap();
 
     Ok(())
 }

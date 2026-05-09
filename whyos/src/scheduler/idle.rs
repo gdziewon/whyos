@@ -1,6 +1,6 @@
 use core::mem::MaybeUninit;
 
-use crate::{StackSize, memory::StaticMemory, task::{Stack, task_exit_trampoline}};
+use crate::{StackSize, memory::StaticMemory, scheduler::Kernel, task::{Stack, task_exit_trampoline}};
 
 const IDLE_STACK_SIZE: usize = StackSize::SMALL.as_bytes();
 
@@ -11,7 +11,7 @@ static mut IDLE_MEMORY: IdleMemory = IdleMemory(MaybeUninit::uninit());
 
 extern "C" fn idle_entry(_: usize) {
     loop {
-        crate::task::ops::reap_zombies();
+        Kernel::lock(|k| k.reap_zombies());
         crate::arch::wfi();
     }
 }
