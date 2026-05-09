@@ -36,10 +36,23 @@ macro_rules! impl_bitmap {
             pub fn is_empty(&self) -> bool { self.0 == 0 }
 
             #[inline]
+            pub fn is_full(&self) -> bool { self.0 == <$t>::MAX }
+
+            #[inline]
             pub fn is_set(&self, bit: usize) -> bool { (self.0 & ((1 as $t) << bit)) != 0 }
 
             #[inline]
             pub fn ones(&self) -> usize { self.0.count_ones() as usize }
+
+            #[inline]
+            pub fn trailing_zeros(&self) -> usize {
+                self.0.trailing_zeros() as usize
+            }
+
+            #[inline]
+            pub fn leading_zeros(&self) -> usize {
+                self.0.leading_zeros() as usize
+            }
 
             #[inline]
             pub fn first_unset(&self) -> Option<usize> {
@@ -141,4 +154,3 @@ impl_bitmap!(u8);
 impl_bitmap!(u16);
 impl_bitmap!(u32);
 impl_bitmap!(u64);
-impl_bitmap!(u128);

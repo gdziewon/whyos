@@ -1,26 +1,29 @@
 use core::{cell::UnsafeCell, mem::MaybeUninit};
 
 use critical_section::Mutex;
-use crate::utils::Bitmap;
+use crate::utils::MultiBitmap;
 
-type PoolMask = u64;
-const POOL_SIZE: usize = PoolMask::BITS as usize;
 const BLOCK_SIZE: usize = 1024; // 1kb
-const TOTAL_BYTES: usize = POOL_SIZE * BLOCK_SIZE; // 64kb
+const MAX_BLOCKS: usize = 256; // 256kb -> perfect for rp2350 // todo: should be behind feature
+
+const BITMAP_WORDS: usize = MAX_BLOCKS.div_ceil(64); // how many u64 words we need
+const TOTAL_BYTES: usize = MAX_BLOCKS * BLOCK_SIZE;
 
 #[repr(C, align(8))]
 struct MemoryPool {
     buffer: MaybeUninit<[u8; TOTAL_BYTES]>,
-    bitmap: Bitmap<PoolMask>
+    bitmap: MultiBitmap<BITMAP_WORDS>,
 }
+
 
 unsafe impl Sync for MemoryPool {}
 
 // simple bitmap allocator
 static MEMORY: Mutex<UnsafeCell<MemoryPool>> = Mutex::new(UnsafeCell::new(MemoryPool {
     buffer: MaybeUninit::uninit(),
-    bitmap: Bitmap::<u64>::new(),
+    bitmap: MultiBitmap::new(),
 }));
+
 
 pub trait MemChunk {
     fn ptr(&self) -> *mut u8;
@@ -51,15 +54,12 @@ unsafe impl Send for StaticMemory {}
 
 pub struct AllocatedMemory {
     ptr: *mut u8,
-    size: usize,
+    size: usize, // always a multiple of BLOCK_SIZE
 }
 
 impl MemChunk for AllocatedMemory {
-    #[inline]
-    fn ptr(&self) -> *mut u8 { self.ptr }
-
-    #[inline]
-    fn size(&self) -> usize { self.size }
+    #[inline] fn ptr(&self) -> *mut u8 { self.ptr }
+    #[inline] fn size(&self) -> usize { self.size }
 }
 
 impl Drop for AllocatedMemory {
@@ -73,38 +73,29 @@ unsafe impl Send for AllocatedMemory {}
 // rounds up the size to multiple of 1024 (kb)
 pub fn alloc(size: usize) -> Option<AllocatedMemory> {
     let blocks = size.div_ceil(BLOCK_SIZE);
-
-    if blocks == 0 || blocks > POOL_SIZE {
+    if blocks == 0 || blocks > MAX_BLOCKS {
         return None;
     }
 
     critical_section::with(|cs| {
-        let pool = unsafe {&mut *MEMORY.borrow(cs).get() };
+        let pool = unsafe { &mut *MEMORY.borrow(cs).get() };
 
-        if let Some(start_idx) = pool.bitmap.find_first_fit(blocks) {
-            pool.bitmap.set_range(start_idx, blocks); // found, mark as used
-
-            let base_ptr = pool.buffer.as_mut_ptr() as *mut u8;
-            let start_offset = start_idx * BLOCK_SIZE;
-            let alloc_ptr = unsafe { base_ptr.add(start_offset) };
-
-            let size = blocks * BLOCK_SIZE;
-            return Some(AllocatedMemory { ptr: alloc_ptr, size});
-        }
-        None
+        pool.bitmap.find_first_fit(blocks).map(|start| {
+            pool.bitmap.set_range(start, blocks);
+            let ptr = unsafe {
+                pool.buffer.as_mut_ptr().cast::<u8>().add(start * BLOCK_SIZE)
+            };
+            AllocatedMemory { ptr, size: blocks * BLOCK_SIZE }
+        })
     })
 }
 
 fn dealloc(chunk: &mut AllocatedMemory) {
     critical_section::with(|cs| {
-        let pool = unsafe { &mut *MEMORY.borrow(cs).get() };
-        let base_ptr = pool.buffer.as_mut_ptr() as *mut u8;
-
-        let offset = chunk.ptr as usize - base_ptr as usize; // todo: wrapping sub?
-        let start_bit = offset / BLOCK_SIZE;
-
-        let blocks = chunk.size.div_ceil(BLOCK_SIZE);
-
+        let pool      = unsafe { &mut *MEMORY.borrow(cs).get() };
+        let base      = pool.buffer.as_mut_ptr() as usize;
+        let start_bit = (chunk.ptr as usize - base) / BLOCK_SIZE;
+        let blocks    = chunk.size / BLOCK_SIZE; // always exact
         pool.bitmap.clear_range(start_bit, blocks);
-    })
+    });
 }
