@@ -1,10 +1,8 @@
-use core::convert::Infallible;
-
 use embedded_hal_nb::serial::Read;
 
 use crate::{hal, board::{Uart, UartRx, UartTx}};
 use whyos::{Mutex, Queue};
-use whyos_shell::embedded_io::{Write, ErrorType};
+use whyos_shell::embedded_io::Write;
 
 
 pub static SHELL_RX_QUEUE: Queue<u8, 64> = Queue::new();
@@ -12,43 +10,10 @@ pub static SHELL_RX_QUEUE: Queue<u8, 64> = Queue::new();
 static UART_RX: Mutex<Option<UartRx>> = Mutex::new(None);
 static UART_TX: Mutex<Option<UartTx>> = Mutex::new(None);
 
-#[derive(Clone, Copy)]
-pub struct SharedUart;
-
-impl ErrorType for SharedUart {
-    type Error = Infallible;
-}
-
-impl Write for SharedUart {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        let mut guard = UART_TX.lock();
-        if let Some(tx) = guard.as_mut() {
-            tx.write(buf)
-        } else {
-            Ok(0)
-        }
-    }
-
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        let mut guard = UART_TX.lock();
-        if let Some(tx) = guard.as_mut() {
-            tx.flush()
-        } else {
-            Ok(())
-        }
-    }
-}
-
-pub fn print(args: core::fmt::Arguments) {
-    let mut writer = SharedUart;
-    let _ = writer.write_fmt(args);
-}
-
-#[macro_export]
-macro_rules! uprintln {
-    ($($arg:tt)*) => {
-        $crate::uart::print(format_args!($($arg)*));
-        $crate::uart::print(format_args!("\r\n"));
+pub fn hw_print(data: &[u8]) {
+    let mut guard = UART_TX.lock();
+    if let Some(tx) = guard.as_mut() {
+        let _ = tx.write_all(data);
     }
 }
 

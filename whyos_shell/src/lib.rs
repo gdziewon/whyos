@@ -4,12 +4,16 @@ pub use embedded_io;
 
 mod parser;
 mod executor;
+mod io;
+mod prog;
+pub use prog::Program;
 
 use heapless::String;
 use embedded_io::{Write, ErrorType};
-use core::fmt::{self};
 
-use whyos::{Queue, StackSize, TaskHandle, TaskRoutineArg};
+use whyos::{Queue, TaskHandle};
+
+use crate::{io::PrintFn, prog::PROGRAMS};
 
 pub trait Writer: ErrorType + Write {}
 impl<T: ErrorType + Write> Writer for T {}
@@ -28,18 +32,11 @@ Commands:\r
   execute|e <name> [arg]      Execute a program\r
   reboot                      Reboot the system\r
 ";
-const WELCOME_MSG: &str = "\r\nWhyOS Shell\r\n";
+const WELCOME_MSG: &str = "WhyOS Shell";
 const PROMPT: &str = "Y-Oh!> ";
 const BACKSPACE_SEQ: &str = "\x08 \x08"; // destructive backspace
 
-pub struct Program {
-    pub name: &'static str,
-    pub desc: &'static str,
-    pub entry: TaskRoutineArg<usize>,
-    pub default_arg: usize,
-    pub priority: u8,
-    pub stack_size: StackSize,
-}
+
 
 enum Command<'a> {
     Help,
@@ -58,26 +55,26 @@ enum Command<'a> {
     Empty,
 }
 
-pub struct Shell<'a, W> {
+pub struct Shell<'a> {
     input: &'a Queue<u8, 64>,
-    output: W,
     buffer: String<64>,
-    programs: &'a [Program]
+    user_programs: &'a [Program]
 }
 
-impl<'a, W: Writer> Shell<'a, W> { // todo: validate no duplicate names
-    pub fn new(input: &'a Queue<u8, 64>, output: W, programs: &'a [Program]) -> Self {
+impl<'a> Shell<'a> { // todo: validate no duplicate names
+    pub fn new(input: &'a Queue<u8, 64>, write_fn: PrintFn, user_programs: &'a [Program]) -> Self {
+        io::set_stdout(write_fn);
         Self {
             input,
-            output,
             buffer: String::new(),
-            programs
+            user_programs
         }
     }
 
     pub fn run(&mut self) -> ! {
-        print(&mut self.output, WELCOME_MSG);
-        print(&mut self.output, PROMPT);
+        uprintln!("");
+        uprintln!("{}", WELCOME_MSG);
+        uprint!("{}", PROMPT);
 
         loop {
             let byte = self.input.receive();
@@ -85,43 +82,33 @@ impl<'a, W: Writer> Shell<'a, W> { // todo: validate no duplicate names
             match byte {
                 // ENTER
                 b'\r' | b'\n' => {
-                    print(&mut self.output, "\r\n");
+                    uprintln!("");
 
                     let text = self.buffer.as_str();
 
                     let cmd = parser::parse(text);
 
-                    executor::execute(cmd, self.programs, &mut self.output);
+                    executor::execute(cmd, PROGRAMS.iter().chain(self.user_programs));
 
                     self.buffer.clear();
 
-                    print(&mut self.output, PROMPT);
+                    uprint!("{}", PROMPT);
                 }
                 // BACKSPACE
                 b'\x08' | 0x7F => {
                     if !self.buffer.is_empty() { // so user can't backspace the prompt
                         self.buffer.pop();
-                        print(&mut self.output, BACKSPACE_SEQ);
+                        uprint!("{}", BACKSPACE_SEQ);
                     }
                 }
                 // anything else
                 c => {
                     if self.buffer.push(c as char).is_ok() {
                         // echo
-                        let _ = self.output.write(&[c]);
+                       uprint!("{}", c as char);
                     }
                 }
             }
         }
     }
-}
-
-pub(crate) fn print<W: Writer>(writer: &mut W, s: &str) {
-    let _ = writer.write_all(s.as_bytes());
-    let _ = writer.flush();
-}
-
-pub(crate) fn fprint<W: Writer>(writer: &mut W, args: fmt::Arguments) {
-    let _ = writer.write_fmt(args);
-    let _ = writer.flush();
 }

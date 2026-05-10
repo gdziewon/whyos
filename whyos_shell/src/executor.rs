@@ -1,25 +1,25 @@
-use crate::{Program, fprint, print};
-use crate::{Writer, Command, HELP_MSG};
+use crate::{Program, uprint, uprintln};
+use crate::{Command, HELP_MSG};
 
-pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
+pub fn execute<'a>(cmd: Command, mut programs: impl Iterator<Item = &'a Program> + 'a)
 {
     match cmd {
         Command::Empty => (),
-        Command::Help => print(writer, HELP_MSG),
-        Command::Name => fprint(writer, format_args!("{}\r\n", whyos::build_name())),
+        Command::Help => uprint!("{}", HELP_MSG),
+        Command::Name => uprintln!("{}", whyos::build_name()),
         Command::Reboot => {
-            print(writer, "Rebooting system...\r\n");
+            uprintln!("Rebooting system...");
             whyos::reboot()
         }
 
         Command::Uptime => {
             let ticks = whyos::uptime_ticks();
-            fprint(writer, format_args!("{}\r\n", ticks));
+            uprintln!("{}", ticks);
         }
 
         Command::Ps => {
-            print(writer, " ID | State     | Stack(Peak/Total) | Name\r\n");
-            print(writer, "────+───────────+───────────────────+──────────────\r\n");
+            uprintln!(" ID | State     | Stack(Peak/Total) | Name");
+            uprintln!("────+───────────+───────────────────+──────────────");
 
             for handle in whyos::allocated() {
                 if let Ok(info) = handle.info() {
@@ -27,15 +27,14 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
 
                     let pct = (info.max_stack_usage * 100) / info.stack_size;
 
-                    fprint(writer, format_args!(
-                        " {:>4} | {:<9} | {:>4} / {:<4} ({:>2}%) | {}\r\n",
+                    uprintln!(" {:>4} | {:<9} | {:>4} / {:<4} ({:>2}%) | {}",
                         info.handle.as_u32(),
                         info.state,
                         info.max_stack_usage,
                         info.stack_size,
                         pct,
                         name
-                    ));
+                    );
                 }
             }
         }
@@ -46,7 +45,7 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
                     let stack_top = info.stack_base + info.stack_size;
                     let current_usage = stack_top.saturating_sub(info.current_sp);
 
-                    fprint(writer, format_args!(
+                    uprintln!(
                         "──────────────────────────────────────────\r\n\
                         Task ID:      {}\r\n\
                         Name:         {}\r\n\
@@ -58,7 +57,7 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
                         Stack Size:   {} bytes\r\n\
                         Current Use:  {} bytes\r\n\
                         Peak Usage:   {} bytes ({}%)\r\n\
-                        ──────────────────────────────────────────\r\n",
+                        ──────────────────────────────────────────",
                         info.handle,
                         info.name.unwrap_or("<unnamed>"),
                         info.state,
@@ -69,35 +68,35 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
                         current_usage,
                         info.max_stack_usage,
                         (info.max_stack_usage * 100) / info.stack_size
-                    ));
+                    );
                 }
-                Err(_) => print(writer, "Error: Task not found\r\n"),
+                Err(_) => uprintln!("Error: Task not found"),
             }
         }
 
         Command::Suspend(handle) => {
             match handle.suspend() {
-                Ok(_) => fprint(writer, format_args!("Task {} suspended\r\n", handle)),
-                Err(_) => fprint(writer, format_args!("Failed to suspend task {}\r\n", handle))
+                Ok(_) => uprintln!("Task {} suspended", handle),
+                Err(_) => uprintln!("Failed to suspend task {}", handle)
             }
         }
 
         Command::Resume(handle) => {
             match handle.resume() {
-                Ok(_) => fprint(writer, format_args!("Task {} resumed\r\n", handle)),
-                Err(_) => fprint(writer, format_args!("Failed to resume task {}\r\n", handle))
+                Ok(_) => uprintln!("Task {} resumed", handle),
+                Err(_) => uprintln!("Failed to resume task {}", handle)
             }
         }
 
         Command::Kill(handle) => {
             match handle.kill() {
-                Ok(_) => fprint(writer, format_args!("Task {} killed\r\n", handle)),
-                Err(_) => fprint(writer, format_args!("Failed to kill task {}\r\n", handle)),
+                Ok(_) => uprintln!("Task {} killed", handle),
+                Err(_) => uprintln!("Failed to kill task {}", handle),
             }
         }
 
         Command::Execute(name, arg_opt) => {
-            if let Some(prog) = programs.iter().find(|p| p.name == name) {
+            if let Some(prog) = programs.find(|p| p.name == name) {
                 let arg = arg_opt.unwrap_or(prog.default_arg);
 
                 if let Err(e) = whyos::TaskBuilder::with_value(prog.entry, arg)
@@ -105,36 +104,36 @@ pub fn execute<W: Writer>(cmd: Command, programs: &[Program], writer: &mut W)
                     .priority(prog.priority)
                     .stack_size(prog.stack_size)
                     .spawn() {
-                        fprint(writer, format_args!("Couldn't execute '{}', error: {:?}", name, e));
+                        uprintln!("Couldn't execute '{}', error: {:?}", name, e);
                     }
             } else {
-                fprint(writer, format_args!("Unknown program: '{}'", name));
+                uprintln!("Unknown program: '{}'", name);
             }
         }
 
         Command::List => {
-            print(writer, " Name           | Prio | Stack | Default | Description\r\n");
-            print(writer, "────────────────+──────+───────+─────────+──────────────────────────\r\n");
+            uprintln!(" Name           | Prio | Stack | Default | Description");
+            uprintln!("────────────────+──────+───────+─────────+──────────────────────────");
 
             for prog in programs {
-                fprint(writer, format_args!(
-                    " {:<14} | {:<4} | {:<5} | {:<7} | {}\r\n",
+                uprintln!(
+                    " {:<14} | {:<4} | {:<5} | {:<7} | {}",
                     prog.name,
                     prog.priority,
                     prog.stack_size.as_bytes(),
                     prog.default_arg,
                     prog.desc
-                ));
+                );
             }
-            print(writer, "\r\nType 'execute <name> [arg]' to run a program.\r\n");
+            uprintln!("\r\nType 'execute <name> [arg]' to run a program.");
         }
 
         Command::Invalid(msg) => {
-            fprint(writer, format_args!("{}\r\n", msg));
+            uprintln!("{}", msg);
         }
 
         Command::Unknown(cmd_text) => {
-            fprint(writer, format_args!("Unknown command: '{}'\r\n", cmd_text));
+            uprintln!("Unknown command: '{}'", cmd_text);
         }
     }
 }
