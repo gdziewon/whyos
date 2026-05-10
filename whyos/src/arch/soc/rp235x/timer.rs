@@ -1,8 +1,5 @@
-use super::trap::trap_entry;
-use riscv::register::mie;
+pub(super) struct SioTimer;
 
-/// ARCH: RP2350 specific
-pub struct SioTimer;
 impl SioTimer { // 3.1.8. RISC-V platform timer
     const BASE: usize = 0xd000_0000;
 
@@ -32,32 +29,11 @@ impl SioTimer { // 3.1.8. RISC-V platform timer
             Self::MTIMECMPH.write_volatile((cmp >> 32) as u32);
         }
     }
-}
 
-pub unsafe fn start_os(tick_hz: u32) -> ! { // todo: add Hertz struct?
-    unsafe { riscv::register::mtvec::write(
-        trap_entry as *const () as usize,
-        riscv::register::mtvec::TrapMode::Direct
-    )};
-
-    let interval_us = (1_000_000 / tick_hz) as u64; // watchdog tick is 1 MHZ on RP2350
-
-    let now = SioTimer::get_time();
-    SioTimer::set_compare(now + interval_us);
-
-    unsafe { mie::set_mtimer(); }// enable timer interrupt
-
-    let idle_sp = crate::scheduler::Kernel::lock(|k| {
-        k.set_timer_interval(tick_hz);
-        k.idle_sp()
-    });
-
-    unsafe {
-        core::arch::asm!(
-            "mv sp, {0}",
-            "j restore_context", // jump to the label in start
-            in(reg) idle_sp,
-            options(noreturn)
-        );
+    pub fn schedule_next(interval_hz: u32) {
+        let interval_us = (1_000_000 / interval_hz) as u64; // ARCH 1_000_000 specific for rp235x
+        let now = Self::get_time();
+        Self::set_compare(now + interval_us);
     }
 }
+

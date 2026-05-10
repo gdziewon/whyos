@@ -30,13 +30,14 @@ impl Kernel {
         })
     }
 
-    pub fn init() {
+    pub fn init(freq: u32) -> usize {
         static KERNEL_RUNNING: AtomicBool = AtomicBool::new(false);
         if KERNEL_RUNNING.swap(true, core::sync::atomic::Ordering::SeqCst) {
             panic!("WhyOS: Kernel already initialized");
         }
         Kernel::lock(|k| {
-            k.init_idle();
+            k.set_timer_interval(freq);
+            k.init_idle()
         })
     }
 }

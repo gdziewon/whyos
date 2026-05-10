@@ -1,7 +1,7 @@
 use core::arch::naked_asm;
 use crate::scheduler::Kernel;
 use super::frame::InitStackFrame;
-use super::start::SioTimer;
+use crate::arch::{TargetArch, KernelArch as _};
 
 // defined in linker as well, if it isnt defined, we use default handler from riscv-rt
 unsafe extern "C" {
@@ -76,10 +76,7 @@ extern "C" fn trap_handler(sp: usize, mcause: u32, mtval: u32) -> usize {
     match cause {
         TrapCause::Interrupt(Interrupt::MachineTimer) => {
             Kernel::lock(|k| {
-                let interval = k.timer_interval() as u64;
-
-                let now = SioTimer::get_time();
-                SioTimer::set_compare(now + interval);
+                TargetArch::tick(k.timer_interval());
 
                 k.on_tick();
                 k.schedule(sp)

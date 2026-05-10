@@ -2,9 +2,10 @@ use core::{cell::UnsafeCell, mem::MaybeUninit};
 
 use critical_section::Mutex;
 use crate::utils::MultiBitmap;
+use crate::arch::{KernelArch as _, TargetArch};
 
 const BLOCK_SIZE: usize = 1024; // 1kb
-const MAX_BLOCKS: usize = 256; // 256kb -> perfect for rp2350 // todo: should be behind feature
+const MAX_BLOCKS: usize = TargetArch::HEAP_KB;
 
 const BITMAP_WORDS: usize = MAX_BLOCKS.div_ceil(64); // how many u64 words we need
 const TOTAL_BYTES: usize = MAX_BLOCKS * BLOCK_SIZE;

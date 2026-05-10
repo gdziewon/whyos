@@ -1,4 +1,3 @@
-use core::arch::asm;
 use riscv::register::mstatus;
 
 #[inline(always)]

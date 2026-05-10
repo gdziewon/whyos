@@ -10,7 +10,7 @@ fn panic(info: &PanicInfo) -> ! {
     let is_task = is_in_task();
 
     if is_task {
-        if let Some(tid) = Kernel::lock(|k| k.current_task()) {
+        if let Some(tid) = Kernel::try_lock(|k| k.current_task()).flatten() {
             defmt::warn!("WhyOS: Task {} panicked: {}", tid.id(), info);
 
             let _ = Kernel::lock(|k| k.make_zombie(tid));

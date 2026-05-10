@@ -3,6 +3,10 @@ name = "whyos"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["rp235x"]
+rp235x = []
+
 [dependencies]
 critical-section = "1.2.0"
 defmt = "1.0.1"

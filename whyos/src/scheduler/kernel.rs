@@ -214,12 +214,13 @@ impl Kernel {
         Ok(self.make_zombie(tid))
     }
 
-    pub fn init_idle(&mut self) {
+    pub fn init_idle(&mut self) -> usize {
         if self.idle.is_some() {
             panic!("WhyOS: idle already initialized");
         }
 
         self.idle = Some(IdleTask::new());
+        self.idle_sp()
     }
 
     pub fn make_zombie(&mut self, tid: TaskId) -> ContextSwitch {

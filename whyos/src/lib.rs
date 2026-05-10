@@ -31,7 +31,7 @@ use crate::task::{TaskId};
 /// # Arguments
 /// * `freq` - The system tick frequency in Hertz (Hz).
 pub fn start(freq: u32) -> ! {
-    Kernel::init();
+    Kernel::init(freq);
     unsafe { arch::start_os(freq) }
 }
 
