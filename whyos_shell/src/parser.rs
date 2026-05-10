@@ -20,6 +20,7 @@ pub fn parse(text: &str) -> Command<'_> {
         "suspend" | "s" => parse_id(args, "Usage: suspend <id>", Command::Suspend),
         "resume" | "r" => parse_id(args, "Usage: resume <id>", Command::Resume),
         "kill" | "k" => parse_id(args, "Usage: kill <id>", Command::Kill),
+        "freq" => parse_freq(args),
         "execute" | "e" => parse_exec(args),
         "list" | "l" => Command::List,
         _ => Command::Unknown(trimmed),
@@ -45,6 +46,19 @@ fn parse_exec<'a>(args: &'a str) -> Command<'a> {
     };
 
     Command::Execute(name, arg)
+}
+
+fn parse_freq<'a>(args: &'a str) -> Command<'a> {
+    let args = args.trim();
+    if args.is_empty() {
+        return Command::Freq(None);
+    }
+
+    if let Ok(val) = args.parse::<u32>() {
+        Command::Freq(Some(val))
+    } else {
+        Command::Invalid("Error: Frequency must be a number")
+    }
 }
 
 fn parse_id<F>(args: &str, usage: &'static str, constructor: F) -> Command<'static>

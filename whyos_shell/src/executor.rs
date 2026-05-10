@@ -95,6 +95,19 @@ pub fn execute<'a>(cmd: Command, mut programs: impl Iterator<Item = &'a Program>
             }
         }
 
+        Command::Freq(new_freq) => {
+            if let Some(freq) = new_freq {
+                if freq == 0 {
+                    uprintln!("Frequency cannot be 0");
+                } else {
+                    whyos::set_tick_freq(freq);
+                    uprintln!("System frequency updated to {} Hz", freq);
+                }
+            } else {
+                uprintln!("{} Hz", whyos::tick_freq());
+            }
+        }
+
         Command::Execute(name, arg_opt) => {
             if let Some(prog) = programs.find(|p| p.name == name) {
                 let arg = arg_opt.unwrap_or(prog.default_arg);

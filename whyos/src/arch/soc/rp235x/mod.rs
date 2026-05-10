@@ -24,6 +24,14 @@ impl KernelArch for SocArch {
     #[inline(always)]
     fn tick(_interval_hz: u32) {} // systick auto-reloads
 
+    fn set_tick_freq(freq: u32) {
+        let mut core = unsafe { cortex_m::Peripherals::steal() };
+        let syst = &mut core.SYST;
+        let interval_us = 1_000_000 / freq;
+        syst.set_reload(interval_us);
+        syst.clear_current();
+    }
+
     unsafe fn start() -> ! {
         unsafe { core::arch::asm!("svc 0", options(noreturn)) }
     }
@@ -46,6 +54,10 @@ impl KernelArch for SocArch {
 
     fn tick(interval_hz: u32) {
         timer::SioTimer::schedule_next(interval_hz);
+    }
+
+    fn set_tick_freq(freq: u32) {
+        timer::SioTimer::schedule_next(freq);
     }
 
     unsafe fn start() -> ! {

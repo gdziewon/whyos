@@ -18,6 +18,7 @@ pub trait KernelArch {
 
     unsafe fn init(tick_hz: u32);
     fn tick(interval_hz: u32);
+    fn set_tick_freq(freq: u32);
     unsafe fn start() -> !;
 }
 

@@ -28,6 +28,7 @@ Commands:\r
   suspend|s <id>              Suspend a task\r
   resume|r <id>               Resume a suspended task\r
   kill|k <id>                 Kill a task (unsafe)\r
+  freq [hz]                   Get or set system tick frequency\r
   list|l                      List available programs\r
   execute|e <name> [arg]      Execute a program\r
   reboot                      Reboot the system\r
@@ -50,6 +51,7 @@ enum Command<'a> {
     Kill(TaskHandle),
     Execute(&'a str, Option<usize>),
     List,
+    Freq(Option<u32>),
     Invalid(&'a str),
     Unknown(&'a str),
     Empty,

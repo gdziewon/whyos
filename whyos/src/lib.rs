@@ -35,6 +35,19 @@ pub fn start(freq: u32) -> ! {
     unsafe { arch::start_os(freq) }
 }
 
+/// Changes the system tick frequency
+pub fn set_tick_freq(freq: u32) {
+    use crate::arch::KernelArch;
+    Kernel::lock(|k| k.set_timer_interval(freq));
+    arch::TargetArch::set_tick_freq(freq);
+}
+
+/// Returns system frequency
+pub fn tick_freq() -> u32 {
+    Kernel::lock(|k| k.timer_interval())
+}
+
+
 #[inline] pub fn spawn(entry: TaskRoutine) -> WhyResult<TaskHandle> { TaskBuilder::new(entry).spawn() }
 #[inline] pub fn spawn_with_priority(entry: TaskRoutine, priority: u8) -> WhyResult<TaskHandle> { TaskBuilder::new(entry).priority(priority).spawn() }
 
