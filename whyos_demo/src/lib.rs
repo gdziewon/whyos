@@ -111,7 +111,7 @@ macro_rules! harness {
                 .spawn()
                 .unwrap();
 
-            whyos::start(1000);
+            whyos::start(core::num::NonZeroU32::new(1000).unwrap());
         }
     };
 }

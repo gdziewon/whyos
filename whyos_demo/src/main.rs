@@ -36,5 +36,5 @@ fn main() -> ! {
     whyos_demo::shell::init_shell(board.uart);
 
     info!("Starting WhyOS...");
-    whyos::start(1000); // todo add some Freq struct maybe
+    whyos::start(core::num::NonZeroU32::new(1000).unwrap()); // todo add some Freq struct maybe
 }

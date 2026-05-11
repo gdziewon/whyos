@@ -30,16 +30,16 @@ use crate::task::{TaskId};
 ///
 /// # Arguments
 /// * `freq` - The system tick frequency in Hertz (Hz).
-pub fn start(freq: u32) -> ! {
-    Kernel::init(freq);
-    unsafe { arch::start_os(freq) }
+pub fn start(freq: NonZero<u32>) -> ! {
+    Kernel::init(freq.get());
+    unsafe { arch::start_os(freq.get()) }
 }
 
 /// Changes the system tick frequency
-pub fn set_tick_freq(freq: u32) {
+pub fn set_tick_freq(freq: NonZero<u32>) {
     use crate::arch::KernelArch;
-    Kernel::lock(|k| k.set_timer_interval(freq));
-    arch::TargetArch::set_tick_freq(freq);
+    Kernel::lock(|k| k.set_timer_interval(freq.get()));
+    arch::TargetArch::set_tick_freq(freq.get());
 }
 
 /// Returns system frequency

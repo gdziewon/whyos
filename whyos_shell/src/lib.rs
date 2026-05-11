@@ -2,60 +2,24 @@
 
 pub use embedded_io;
 
-mod parser;
-mod executor;
 mod io;
 mod prog;
+mod cmd;
 pub use prog::Program;
 
 use heapless::String;
 use embedded_io::{Write, ErrorType};
 
-use whyos::{Queue, TaskHandle};
+use whyos::Queue;
 
-use crate::{io::PrintFn, prog::PROGRAMS};
+use crate::{cmd::Cmd, io::PrintFn};
 
 pub trait Writer: ErrorType + Write {}
 impl<T: ErrorType + Write> Writer for T {}
 
-const HELP_MSG: &str = "\
-Commands:\r
-  help|h|?                    Show this help message\r
-  name|n                      Print build name\r
-  ps|p                        List all tasks\r
-  uptime|u                    Show system uptime in ticks\r
-  info|i <id>                 Show detailed task information\r
-  suspend|s <id>              Suspend a task\r
-  resume|r <id>               Resume a suspended task\r
-  kill|k <id>                 Kill a task (unsafe)\r
-  freq [hz]                   Get or set system tick frequency\r
-  list|l                      List available programs\r
-  execute|e <name> [arg]      Execute a program\r
-  reboot                      Reboot the system\r
-";
 const WELCOME_MSG: &str = "WhyOS Shell";
 const PROMPT: &str = "Y-Oh!> ";
 const BACKSPACE_SEQ: &str = "\x08 \x08"; // destructive backspace
-
-
-
-enum Command<'a> {
-    Help,
-    Name,
-    Reboot,
-    Uptime,
-    Ps,
-    TaskInfo(TaskHandle),
-    Suspend(TaskHandle),
-    Resume(TaskHandle),
-    Kill(TaskHandle),
-    Execute(&'a str, Option<usize>),
-    List,
-    Freq(Option<u32>),
-    Invalid(&'a str),
-    Unknown(&'a str),
-    Empty,
-}
 
 pub struct Shell<'a> {
     input: &'a Queue<u8, 64>,
@@ -63,7 +27,7 @@ pub struct Shell<'a> {
     user_programs: &'a [Program]
 }
 
-impl<'a> Shell<'a> { // todo: validate no duplicate names
+impl<'a> Shell<'a> { // todo: validate no duplicate names on user_progs
     pub fn new(input: &'a Queue<u8, 64>, write_fn: PrintFn, user_programs: &'a [Program]) -> Self {
         io::set_stdout(write_fn);
         Self {
@@ -86,14 +50,18 @@ impl<'a> Shell<'a> { // todo: validate no duplicate names
                 b'\r' | b'\n' => {
                     uprintln!("");
 
-                    let text = self.buffer.as_str();
+                    let text = self.buffer.as_str().trim();
+                    if !text.is_empty() {
+                        let (cmd_name, args) = text.split_once(' ').unwrap_or((text, ""));
 
-                    let cmd = parser::parse(text);
-
-                    executor::execute(cmd, PROGRAMS.iter().chain(self.user_programs));
+                        if let Some(cmd) = Cmd::parse(cmd_name) {
+                            cmd.run(args, self.user_programs);
+                        } else {
+                            uprintln!("Unknown command: '{}'. Type 'help' for a list of commands.", cmd_name);
+                        }
+                    }
 
                     self.buffer.clear();
-
                     uprint!("{}", PROMPT);
                 }
                 // BACKSPACE

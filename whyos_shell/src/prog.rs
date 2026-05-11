@@ -61,6 +61,23 @@ extern "C" fn prog_hardfault(_: usize) {
     }
 }
 
+extern "C" fn prog_magic(_: usize) {
+    const MAGIC_VAL: u32 = 0xABAD_1DEA; // "A bad idea"
+    static mut MAGIC_VAR: u32 = MAGIC_VAL;
+
+    let addr = core::ptr::addr_of!(MAGIC_VAR) as usize;
+    uprintln!("\n\rMagic variable is at 0x{:08X}", addr);
+
+    // read_volatile forces compiler to read RAM
+    while unsafe { core::ptr::read_volatile(addr as *const u32) } == MAGIC_VAL {
+        whyos::sleep(10);
+    }
+
+    // reset it so the program can be run again
+    unsafe { core::ptr::write_volatile(addr as *mut u32, MAGIC_VAL) };
+    uprintln!("No more magic!");
+}
+
 pub static PROGRAMS: &[Program] = &[ // todo: add more programs
     Program {
         name: "cnt",
@@ -100,6 +117,14 @@ pub static PROGRAMS: &[Program] = &[ // todo: add more programs
         entry: prog_hardfault,
         default_arg: 0,
         priority: 1,
+        stack_size: StackSize::SMALL
+    },
+    Program {
+        name: "magic",
+        desc: "Wait for someone to poke memory to stop it",
+        entry: prog_magic,
+        default_arg: 0,
+        priority: 3,
         stack_size: StackSize::SMALL
     }
 ];
