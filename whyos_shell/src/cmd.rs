@@ -2,7 +2,13 @@ use crate::prog::{Program, PROGRAMS};
 use crate::{uprintln, uprint};
 use whyos::TaskHandle;
 
-pub type CmdAction = fn(cmd: &Cmd, args: &str, user_programs: &[Program]);
+pub struct Env<'a> {
+    pub user_programs: &'a [Program],
+    pub last_task: &'a mut Option<TaskHandle>,
+}
+
+pub type CmdAction = fn(cmd: &Cmd, args: &str, env: &mut Env);
+
 
 pub struct Cmd {
     pub names: &'static [&'static str],
@@ -18,8 +24,8 @@ impl Cmd {
     }
 
     /// Wykonuje komendę, przekazując jej argumenty i listę programów
-    pub fn run(&self, args: &str, user_programs: &[Program]) {
-        (self.action)(self, args, user_programs)
+    pub fn run(&self, args: &str, env: &mut Env) {
+        (self.action)(self, args, env)
     }
 }
 
@@ -208,11 +214,11 @@ static COMMANDS: &[Cmd] = &[
         names: &["list"],
         usage: "list",
         desc: "List available programs",
-        action: |_, _, user_progs| {
+        action: |_, _, env| {
             uprintln!(" Name           | Prio | Stack | Default | Description");
             uprintln!("────────────────+──────+───────+─────────+──────────────────────────");
 
-            let all_progs = PROGRAMS.iter().chain(user_progs.iter());
+            let all_progs = PROGRAMS.iter().chain(env.user_programs.iter());
             for prog in all_progs {
                 uprintln!(
                     " {:<14} | {:<4} | {:<5} | {:<7} | {}",
@@ -229,7 +235,7 @@ static COMMANDS: &[Cmd] = &[
         names: &["execute", "e"],
         usage: "execute|e <name> [num_arg]",
         desc: "Execute a program",
-        action: |cmd, args, user_progs| {
+        action: |cmd, args, env| {
             let args = args.trim();
             let (name, arg_str) = args.split_once(' ').unwrap_or((args, ""));
             let arg_str = arg_str.trim();
@@ -248,24 +254,28 @@ static COMMANDS: &[Cmd] = &[
                 return;
             };
 
-            let all_progs = PROGRAMS.iter().chain(user_progs.iter());
-            for prog in all_progs {
-                if prog.name == name {
-                    let arg = parsed_arg.unwrap_or(prog.default_arg);
-                    if let Err(e) = whyos::TaskBuilder::with_value(prog.entry, arg)
-                        .name(prog.name)
-                        .priority(prog.priority)
-                        .stack_size(prog.stack_size)
-                        .spawn()
-                    {
-                        uprintln!("Couldn't execute '{}', error: {}", name, e);
-                    } else {
-                        uprintln!("Spawned task '{}' (arg: {})", name, arg);
-                    }
-                    return;
+            let found_prog = PROGRAMS.iter()
+                .chain(env.user_programs.iter())
+                .find(|prog| prog.name == name);
+
+            if let Some(prog) = found_prog {
+                let arg = parsed_arg.unwrap_or(prog.default_arg);
+
+                match whyos::TaskBuilder::with_value(prog.entry, arg)
+                    .name(prog.name)
+                    .priority(prog.priority)
+                    .stack_size(prog.stack_size)
+                    .spawn()
+                {
+                    Ok(h) => {
+                        uprintln!("Spawned task {} ({}) (arg: {})", h.as_u32(), name, arg);
+                        *env.last_task = Some(h);
+                    },
+                    Err(e) => uprintln!("Couldn't execute '{}', error: {}", name, e),
                 }
+            } else {
+                uprintln!("Unknown program: '{}'. Type 'list' to see available.", name);
             }
-            uprintln!("Unknown program: '{}'. Type 'list' to see available.", name);
         }
     },
     Cmd {
