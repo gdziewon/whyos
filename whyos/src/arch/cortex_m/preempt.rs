@@ -23,7 +23,7 @@ pub unsafe extern "C" fn PendSV() {
         // '!' updates r0
         "tst lr, #0x10",             // test bit 4 (identifies FPU usage)
         "it eq",                     // if FPU is enabled... (bit 4 == 0)
-        "vstmdbeq r0!, {{s16-s31}}", // save s16-s31, update r0 (OLD sp) /// fixme -> ARCH: \hw specific, uses fpu
+        "vstmdbeq r0!, {{s16-s31}}", // save s16-s31, update r0 (OLD sp)
 
         // push OLD tasks regs r4-r11 + lr, update r0 (OLD sp)
         "stmdb r0!, {{r4-r11, lr}}",

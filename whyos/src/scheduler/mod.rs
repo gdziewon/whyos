@@ -5,7 +5,7 @@ mod panic;
 use core::{cell::RefCell, sync::atomic::AtomicBool};
 
 use critical_section::Mutex;
-pub use kernel::{Kernel, MAX_TASKS, TaskMask};
+pub use kernel::{Kernel, MAX_TASKS};
 
 
 static KERNEL: Mutex<RefCell<Kernel>> = Mutex::new(RefCell::new(Kernel::new()));

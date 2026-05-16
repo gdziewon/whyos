@@ -1,17 +1,16 @@
 use core::num::NonZero;
 
-use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskHandle, TaskId, TaskMap, TaskRegistry, TaskStack, Tcb, Watchdog}};
+use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskHandle, TaskId, TaskMap, TaskMask, TaskRegistry, TaskStack, Tcb, Watchdog}};
 
 use super::idle::IdleTask;
 
-pub type TaskMask = u32; // FIXME: right now, it can't go above u32, because of active_tasks syscall
 pub const MAX_TASKS: usize = TaskMask::BITS as usize;
 
 pub struct Kernel {
     registry: TaskRegistry,
     current_task: Option<TaskId>,
     system_ticks: u64,
-    timer_interval: u32, // todo: should it be an option?
+    timer_interval: u32,
     idle: Option<IdleTask>,
 
     ready: TaskMap, // wants CPU

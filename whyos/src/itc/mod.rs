@@ -8,8 +8,6 @@ pub use sem::Semaphore;
 
 use crate::{TaskState, scheduler::Kernel, task::{TaskMap, BlockReason}};
 
-// TODO: ADD SYSCALLS FOR ITC!!!!!
-
 #[repr(transparent)]
 struct WaitQueue {
     waiting: TaskMap

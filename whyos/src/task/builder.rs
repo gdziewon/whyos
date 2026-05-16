@@ -1,7 +1,7 @@
 use core::mem;
 
 use super::stack;
-use crate::{error::WhyResult, task::{TaskHandle, ops}};
+use crate::{error::WhyResult, task::TaskHandle};
 
 pub type TaskRoutine = extern "C" fn();
 pub type TaskRoutineArg<T> = extern "C" fn(T);
@@ -145,7 +145,7 @@ impl TaskBuilder {
 
     #[inline]
     pub fn spawn(self) -> WhyResult<TaskHandle> {
-        ops::spawn(self.entry, self.arg, self.name, self.priority, self.stack_size)
+        super::spawn(self.entry, self.arg, self.name, self.priority, self.stack_size)
     }
 }
 

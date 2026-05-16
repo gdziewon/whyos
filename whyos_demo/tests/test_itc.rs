@@ -49,7 +49,7 @@ extern "C" fn waiter_low() {
 
 static EXIT_MUTEX: whyos::Mutex<u32> = whyos::Mutex::new(0);
 
-#[allow(dead_code)] // FIXME: fails, but this will work once I move mutexes onto Kernel
+#[allow(dead_code)] // FIXME: Fails, and will fail for now, as Mutexes aren't cleaned up by Kernel
 fn test_exit_with_mutex() -> TestResult {
     whyos::spawn_with_priority(exit_holder, 5).unwrap();
     whyos::sleep(10);
