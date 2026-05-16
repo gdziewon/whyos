@@ -78,7 +78,7 @@ extern "C" fn prog_magic(_: usize) {
     uprintln!("No more magic!");
 }
 
-pub static PROGRAMS: &[Program] = &[ // todo: add more programs
+pub static PROGRAMS: &[Program] = &[
     Program {
         name: "cnt",
         desc: "Counts down from N to 0",

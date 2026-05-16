@@ -22,29 +22,68 @@ use crate::task::{TaskId};
 
 // TODO: FIGURE OUT which ones are safe to call in MSP mode
 
-/// Starts the WhyOS kernel and begins task scheduling.
+/// Represents a frequency, internally stored in Hertz (Hz).
+///
+/// This is typically used to configure the kernel's system tick timer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Freq(u32); // Hz
+
+impl Freq {
+    /// A convenience constant representing 1 kilohertz (1000 Hz).
+    pub const ONE_KHZ: Self = Self(1000);
+
+    /// Creates a Frequency from Hertz. Returns `None` if `hz` is 0.
+    #[inline]
+    pub const fn from_hz(hz: u32) -> Option<Self> {
+        if hz == 0 {
+            None
+        } else {
+            Some(Self(hz))
+        }
+    }
+
+    /// Creates a Frequency from Kilohertz. Returns `None` if `khz` is 0.
+    ///
+    /// The resulting frequency is saturating if the calculation overflows the maximum `u32` value.
+    #[inline]
+    pub const fn from_khz(khz: u32) -> Option<Self> {
+        Self::from_hz(khz.saturating_mul(1_000))
+    }
+
+    /// Returns the raw frequency value in Hertz.
+    #[inline]
+    pub const fn as_hz(self) -> u32 {
+        self.0
+    }
+}
+
+/// Initializes and starts the WhyOS kernel and begins task scheduling.
 ///
 /// # Panics
 /// This function enforces strict one-shot initialization. It will `panic!` if
 /// called more than once to prevent hardware and kernel state corruption.
 ///
 /// # Arguments
-/// * `freq` - The system tick frequency in Hertz (Hz).
-pub fn start(freq: NonZero<u32>) -> ! {
-    Kernel::init(freq.get());
-    unsafe { arch::start_os(freq.get()) }
+/// * `freq` - The desired system tick frequency.
+pub fn start(freq: Freq) -> ! {
+    Kernel::init(freq.as_hz());
+    unsafe { arch::start_os(freq.as_hz()) }
 }
 
-/// Changes the system tick frequency
-pub fn set_tick_freq(freq: NonZero<u32>) {
+/// Changes the system tick frequency at runtime.
+///
+/// This will dynamically update the internal scheduling frequency.
+pub fn set_tick_freq(freq: Freq) {
     use crate::arch::KernelArch;
-    Kernel::lock(|k| k.set_timer_interval(freq.get()));
-    arch::TargetArch::set_tick_freq(freq.get());
+    Kernel::lock(|k| k.set_timer_interval(freq.as_hz()));
+    arch::TargetArch::set_tick_freq(freq.as_hz());
 }
 
-/// Returns system frequency
-pub fn tick_freq() -> u32 {
-    Kernel::lock(|k| k.timer_interval())
+/// Returns the currently active system tick frequency.
+pub fn tick_freq() -> Freq {
+    Freq(
+        Kernel::lock(|k| k.timer_interval())
+    )
 }
 
 
