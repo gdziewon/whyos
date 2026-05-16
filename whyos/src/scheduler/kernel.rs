@@ -4,6 +4,7 @@ use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, scheduler::C
 use crate::utils::log;
 use super::idle::IdleTask;
 
+/// Maximum number of tasks that may be allocated concurrently.
 pub const MAX_TASKS: usize = TaskMask::BITS as usize;
 
 pub struct Kernel {
@@ -76,7 +77,7 @@ impl Kernel {
         now
     }
 
-    fn wdt_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
+    fn wdt_check(&mut self, tid: TaskId) {
         let task = self.registry.get_task_mut_unchecked(tid);
 
         log::trace!("wdt_check {}", tid.id());
@@ -221,7 +222,7 @@ impl Kernel {
 
         self.ready.add(handle.tid());
 
-        log::info!("Spawned task {} name={:?} prio={}", handle.tid().id(), name, priority);
+        log::info!("Spawned task {} - name={:?} prio={}", handle.tid().id(), name, priority);
 
         Ok(handle)
     }

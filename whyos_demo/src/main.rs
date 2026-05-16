@@ -2,7 +2,6 @@
 #![no_main]
 
 use whyos_demo::{board::{Board, LedPin}};
-use defmt::info;
 use embedded_hal::digital::StatefulOutputPin as _;
 use whyos_demo::hal::entry;
 
@@ -35,6 +34,5 @@ fn main() -> ! {
     #[cfg(feature = "shell")]
     whyos_demo::shell::init_shell(board.uart);
 
-    info!("Starting WhyOS...");
     whyos::start(whyos::Freq::ONE_KHZ);
 }

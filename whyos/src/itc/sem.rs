@@ -5,6 +5,7 @@ use critical_section::Mutex as CSMutex;
 use crate::{scheduler, itc::WaitQueue};
 use crate::utils::log;
 
+/// Synchronization primitive typically used to signal events between tasks.
 pub struct Semaphore {
     state: CSMutex<RefCell<SemState>>
 }
@@ -28,20 +29,28 @@ impl SemState {
 }
 
 impl Semaphore {
+    /// Creates a semaphore with the given initial permit count and maximum capacity.
+    ///
+    /// When the semaphore is signalled, the permit count never exceeds `capacity`.
     pub const fn new(init_permits: usize, capacity: usize) -> Self {
         Self {
             state: CSMutex::new(RefCell::new(SemState::new(init_permits, capacity)))
         }
     }
 
+    /// Creates a binary semaphore with one permit and capacity one.
     pub const fn binary() -> Self {
         Self::new(1, 1)
     }
 
+    /// Creates a counting semaphore whose initial permit count equals its capacity.
+    ///
+    /// This is the same as calling `Semaphore::new(capacity, capacity)`.
     pub const fn counting(capacity: usize) -> Self {
         Self::new(capacity, capacity)
     }
 
+    /// Consumes one permit, blocking the current task if there are no permits available.
     pub fn wait(&self) {
         loop {
             // yield if there are no permits
@@ -68,6 +77,9 @@ impl Semaphore {
         }
     }
 
+    /// Attempts to consume one permit without blocking.
+    ///
+    /// Returns `true` if a permit was acquired.
     #[inline]
     pub fn try_wait(&self) -> bool {
         critical_section::with(|cs| {
@@ -84,6 +96,9 @@ impl Semaphore {
         })
     }
 
+    /// Adds one permit to the semaphore, waking the highest-priority waiter if needed.
+    ///
+    /// The permit count saturates at the semaphore's capacity.
     pub fn signal(&self) {
         // yield if we woke someone
         let someone_waiting = critical_section::with(|cs| {
@@ -103,6 +118,7 @@ impl Semaphore {
         }
     }
 
+    /// Returns the number of currently available permits.
     #[inline]
     pub fn available(&self) -> usize {
         critical_section::with(|cs| {

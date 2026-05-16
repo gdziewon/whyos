@@ -1,5 +1,6 @@
 pub type WhyResult<T> = Result<T, WhyError>;
 
+/// Error type used for WhyOS `Result` values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]

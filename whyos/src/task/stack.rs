@@ -3,7 +3,7 @@ use core::ptr;
 use crate::memory::{AllocatedMemory, MemChunk};
 use crate::arch::InitStackFrame;
 
-pub const STACK_CANARY: u32 = 0xDEADC0DE; // todo: maybe something more random?
+pub const STACK_CANARY: u32 = 0xDEADC0DE;
 pub const STACK_PAINT: u32 = 0xFEEDFACE;
 
 pub type TaskEntryPoint = extern "C" fn(usize);

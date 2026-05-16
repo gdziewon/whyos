@@ -6,13 +6,13 @@
 //! # Key Features
 //!
 //! * **Preemptive Priority Scheduling:** Deterministic, priority-based multitasking ensuring critical tasks consistently meet their real-time deadlines.
-//! * **ITC Primitives:** Ergonomic, priority-aware synchronization structures ([`Mutex`], [`Queue`], [`Semaphore`]).
-//! * **Resilient By Design:** First-class support for software watchdogs, per-task panics and memory-safety at compile-time.
+//! * **ITC Primitives:** Ergonomic, priority-aware synchronization structures, including Mutexes, Semaphores, and Queues.
+//! * **Resilient By Design:** First-class support for software watchdogs, per-task panics, and memory safety at compile-time.
 //!
 //! # Basic Usage
 //!
 //! ```no_run
-//! use whyos::{TaskBuilder, Freq};
+//! use whyos::{TaskBuilder, StackSize, Freq};
 //!
 //! // Define a task routine
 //! extern "C" fn blinky_task() {
@@ -30,6 +30,7 @@
 //!     TaskBuilder::new(blinky_task)
 //!         .name("blinky")
 //!         .priority(10)
+//!         .stack_size(StackSize::SMALL)
 //!         .spawn()
 //!         .expect("Failed to spawn blinky task");
 //!
@@ -52,7 +53,7 @@ mod syscall;
 
 pub use itc::{Mutex, MutexGuard, Queue, Semaphore};
 pub use task::{TaskBuilder, TaskInfo, StackSize};
-pub use task::{TaskRoutine, TaskRoutineArg, TaskState, ResumeContext, TaskHandle};
+pub use task::{TaskRoutine, TaskRoutineArg, TaskState, BlockReason, ResumeContext, TaskHandle};
 pub use scheduler::MAX_TASKS;
 pub use error::WhyError;
 pub use syscall::*;

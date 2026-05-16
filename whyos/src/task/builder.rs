@@ -3,9 +3,21 @@ use core::mem;
 use super::stack;
 use crate::{error::WhyResult, task::TaskHandle};
 
+/// A parameterless task entry point.
 pub type TaskRoutine = extern "C" fn();
+
+/// A task entry point that takes a single argument of type `T`.
 pub type TaskRoutineArg<T> = extern "C" fn(T);
 
+/// A builder for configuring and spawning new tasks in the OS.
+///
+/// This builder allows you to set the task's entry point, argument, priority,
+/// stack size, and an optional name before submitting it to the scheduler.
+///
+/// # Default Values
+/// * **Priority**: `128`
+/// * **Stack Size**: [`StackSize::DEFAULT`]
+/// * **Name**: `None`
 pub struct TaskBuilder {
     entry: stack::TaskEntryPoint,
     arg: usize,
@@ -26,6 +38,7 @@ impl TaskBuilder {
         }
     }
 
+    /// Creates a new `TaskBuilder` for a task that takes no arguments.
     #[inline]
     pub fn new(entry: TaskRoutine) -> Self {
         // cast fn() to fn(usize)
@@ -36,6 +49,15 @@ impl TaskBuilder {
         Self::from_raw(entry_transmuted, 0)
     }
 
+    /// Creates a new `TaskBuilder` passing an argument by value.
+    ///
+    /// The argument type `T` must fit inside a single machine word.
+    /// This is typically used for passing integers, booleans, or small enums.
+    ///
+    /// # Panics
+    ///
+    /// This function will fail to compile if the size of `T` is greater than the
+    /// size of a pointer (`usize`).
     #[inline]
     pub fn with_value<T>(
         entry: TaskRoutineArg<T>,
@@ -64,6 +86,10 @@ impl TaskBuilder {
         Self::from_raw(entry_transmuted, arg_storage)
     }
 
+    /// Creates a new `TaskBuilder` passing a mutable static reference.
+    ///
+    /// The data being referenced must live for the entire lifetime of the OS (`'static`)
+    /// and must be safe to send across task boundaries (`Send`).
     #[inline]
     pub fn with_static_mut<T>(
         entry: TaskRoutineArg<&'static mut T>,
@@ -81,6 +107,10 @@ impl TaskBuilder {
         Self::from_raw(entry_transmuted, arg_addr)
     }
 
+    /// Creates a new `TaskBuilder` passing an immutable static reference.
+    ///
+    /// The data being referenced must live for the entire lifetime of the OS (`'static`)
+    /// and must be safe to share across task boundaries (`Sync`).
     #[inline]
     pub fn with_static_ref<T>(
         entry: TaskRoutineArg<&'static T>,
@@ -97,7 +127,14 @@ impl TaskBuilder {
         Self::from_raw(entry_transmuted, arg_addr)
     }
 
-    // unsafe because ptrs arent Send and 'validness' is unchecked
+    /// Creates a new `TaskBuilder` passing a raw mutable pointer.
+    ///
+    /// # Safety
+    ///
+    /// Raw pointers bypass Rust's thread-safety (`Send`/`Sync`) and lifetime checks.
+    /// The caller must guarantee that:
+    /// 1. The pointer remains valid for the duration of the task's execution.
+    /// 2. Concurrent access to the pointed data is properly synchronized if necessary.
     #[inline]
     pub unsafe fn with_ptr_mut<T>(
         entry: TaskRoutineArg<*mut T>,
@@ -111,7 +148,14 @@ impl TaskBuilder {
         Self::from_raw(entry_transmuted, arg_addr)
     }
 
-    // unsafe, same as above
+    /// Creates a new `TaskBuilder` passing a raw constant pointer.
+    ///
+    /// # Safety
+    ///
+    /// Raw pointers bypass Rust's thread-safety (`Send`/`Sync`) and lifetime checks.
+    /// The caller must guarantee that:
+    /// 1. The pointer remains valid for the duration of the task's execution.
+    /// 2. The memory pointed to is safely accessible by the spawned task.
     #[inline]
     pub unsafe fn with_ptr_const<T>(
         entry: TaskRoutineArg<*const T>,
@@ -125,52 +169,74 @@ impl TaskBuilder {
         Self::from_raw(entry_transmuted, arg_addr)
     }
 
+    /// Sets the priority of the task.
+    ///
+    /// Lower values represent higher scheduling priorities.
     #[inline]
     pub fn priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
     }
 
+    /// Sets the stack size allocated for the task.
+    ///
+    /// See [`StackSize`] for predefined sensible defaults.
     #[inline]
     pub fn stack_size(mut self, size: StackSize) -> Self {
         self.stack_size = size.0;
         self
     }
 
+    /// Assigns an optional string name to the task.
+    ///
+    /// Task names are highly recommended as they greatly simplify debugging
+    /// and profiling via the OS shell or logs.
     #[inline]
     pub fn name(mut self, name: &'static str) -> Self {
         self.name = Some(name);
         self
     }
 
+    /// Submits the configured task to the scheduler, returning `Ok(TaskHandle)` if successful.
     #[inline]
     pub fn spawn(self) -> WhyResult<TaskHandle> {
         super::spawn(self.entry, self.arg, self.name, self.priority, self.stack_size)
     }
 }
 
+
+/// Representation of tasks stack size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StackSize(usize);
 
 impl StackSize {
-    pub const SMALL: Self = Self(1024); // 1kb
+    /// A small stack size of 1 KB.
+    pub const SMALL: Self = Self(1024);
 
-    pub const DEFAULT: Self = Self(2048); // 2kb
+    /// The default stack size of 2 KB.
+    pub const DEFAULT: Self = Self(2048);
 
-    pub const MEDIUM: Self = Self(4096); // 4kb
+    /// A medium stack size of 4 KB.
+    pub const MEDIUM: Self = Self(4096);
 
-    pub const LARGE: Self = Self(8192); // 8kb
+    /// A large stack size of 8 KB.
+    pub const LARGE: Self = Self(8192);
 
+    /// Constructs a `StackSize` from an exact byte count.
+    ///
+    /// Depending on allocator implementation, this might be rounded up to block size.
     #[inline]
     pub const fn bytes(bytes: usize) -> Self {
         Self(bytes)
     }
 
+    /// Constructs a `StackSize` from kilobytes (e.g., `kb(2)` equals 2048 bytes).
     #[inline]
     pub const fn kb(kb: usize) -> Self {
         Self(kb * 1024)
     }
 
+    /// Returns the stack size in bytes as a raw `usize`.
     #[inline]
     pub const fn as_bytes(&self) -> usize {
         self.0
@@ -178,6 +244,7 @@ impl StackSize {
 }
 
 impl Default for StackSize {
+    /// Defaults to `StackSize::DEFAULT`.
     #[inline]
     fn default() -> Self {
         Self::DEFAULT

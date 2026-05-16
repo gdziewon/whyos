@@ -4,6 +4,10 @@ use critical_section::Mutex as CSMutex;
 use crate::{scheduler, itc::WaitQueue};
 use crate::utils::log;
 
+/// A bounded, Multi-Producer / Multi-Consumer (MPMC) queue.
+///
+/// The queue is implemented as a ring buffer with compile-time `CAPACITY`.
+/// Items stored in the queue are moved into the buffer.
 pub struct Queue<T, const N: usize> {
     data: UnsafeCell<MaybeUninit<[T; N]>>,
     state: CSMutex<RefCell<QueueState>>
@@ -32,6 +36,9 @@ impl QueueState {
 unsafe impl<T: Send, const N: usize> Sync for Queue<T, N> {}
 
 impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
+    /// Creates a new bounded queue with capacity `CAPACITY`.
+    ///
+    /// The queue requires `CAPACITY > 0`.
     pub const fn new() -> Self {
         Self {
             data: UnsafeCell::new(MaybeUninit::uninit()),
@@ -39,6 +46,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         }
     }
 
+    /// Enqueues an item, blocking the current task if the queue is full.
     pub fn send(&self, item: T) {
         let mut item_slot = Some(item);
 
@@ -85,6 +93,9 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         }
     }
 
+    /// Attempts to enqueue an item without blocking.
+    ///
+    /// Returns `Ok(())` on success or `Err(item)` if the queue is full.
     #[inline]
     pub fn try_send(&self, item: T) -> Result<(), T> { // we are returning the item in Err(T) if try_send failed
         critical_section::with(|cs| {
@@ -112,6 +123,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         })
     }
 
+    /// Dequeues an item, blocking the current task if the queue is empty.
     pub fn receive(&self) -> T {
         let mut received_data: Option<T> = None;
 
@@ -155,6 +167,9 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         }
     }
 
+    /// Attempts to dequeue an item without blocking.
+    ///
+    /// Returns `Some(item)` on success or `None` if the queue is empty.
     #[inline]
     pub fn try_receive(&self) -> Option<T> {
         critical_section::with(|cs| {
@@ -181,6 +196,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         })
     }
 
+    /// Returns the number of items currently stored in the queue.
     #[inline]
     pub fn len(&self) -> usize {
         critical_section::with(|cs| {
@@ -188,11 +204,13 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         })
     }
 
+    /// Returns `true` if the queue contains no items.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns `true` if the queue is full.
     #[inline]
     pub fn is_full(&self) -> bool {
         self.len() == CAPACITY

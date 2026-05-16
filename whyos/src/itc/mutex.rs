@@ -4,7 +4,7 @@ use critical_section::Mutex as CSMutex;
 use crate::{itc::WaitQueue, scheduler};
 use crate::utils::log;
 
-/// A mutual exclusion primitive useful for protecting shared data.
+/// A mutual exclusion primitive typically used for protecting shared data.
 ///
 /// This mutex will block tasks waiting for the lock to become available.
 /// The highest priority task will be woken up first when the lock is released.
@@ -27,11 +27,9 @@ impl MutexState {
     }
 }
 
-/// An RAII implementation of a "scoped lock" of a mutex. When this structure is
-/// dropped (falls out of scope), the lock will be unlocked.
+/// An RAII implementation of a "scoped lock" of a mutex.
 ///
-/// The data protected by the mutex can be accessed through this guard via its
-/// `Deref` and `DerefMut` implementations.
+/// When this structure is dropped, the lock on the mutex will be released.
 pub struct MutexGuard<'a, T> {
     lock: &'a Mutex<T>,
 }
@@ -72,8 +70,8 @@ impl<T> Mutex<T> {
 
     /// Acquires a mutex, blocking the current task until it is able to do so.
     ///
-    /// This function will block the calling task until it is available to acquire the mutex.
-    /// Upon returning, the task is the only one with the mutex held.
+    /// **Warning:** This implementation is not reentrant. Attempting to lock it
+    /// twice from the same task will result in a deadlock.
     pub fn lock(&self) -> MutexGuard<'_, T> {
         // loop is needed since if the acquisition fails, task should check from the start
         loop {
@@ -119,7 +117,7 @@ impl<T> Mutex<T> {
         })
     }
 
-    /// Checks if the lock is currently held by any task.
+    /// Returns `true` if the lock is held by any task.
     #[inline]
     pub fn is_locked(&self) -> bool {
         critical_section::with(|cs| {
