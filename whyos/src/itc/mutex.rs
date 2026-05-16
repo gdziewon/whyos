@@ -2,6 +2,7 @@ use core::{cell::{RefCell, UnsafeCell}, ops::{Deref, DerefMut}};
 use critical_section::Mutex as CSMutex;
 
 use crate::{itc::WaitQueue, scheduler};
+use crate::utils::log;
 
 /// A mutual exclusion primitive useful for protecting shared data.
 ///
@@ -83,10 +84,12 @@ impl<T> Mutex<T> {
                     state.locked = true;
 
                     state.waiting.remove_current(); // needed for weird stuff with suspend/resume FIXME
+                    log::debug!("Mutex acquired");
                     true
 
                 } else { // we have to wait
                     state.waiting.block_current();
+                    log::debug!("Mutex lock failed, blocking current task");
                     false
                 }
             });
@@ -107,8 +110,10 @@ impl<T> Mutex<T> {
 
             if !state.locked {
                 state.locked = true;
+                log::trace!("Mutex try_lock success");
                 Some(MutexGuard { lock: self })
             } else {
+                log::trace!("Mutex try_lock failed - locked");
                 None
             }
         })
@@ -133,7 +138,10 @@ impl<T> Mutex<T> {
 
         // we might've woke someone with bigger priority, if not then scheduler will let us continue anyway
         if someone_waiting {
+            log::debug!("Mutex released - woke waiting task");
             scheduler::yield_now();
+        } else {
+            log::trace!("Mutex released - no waiting tasks");
         }
     }
 }

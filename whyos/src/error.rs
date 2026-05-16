@@ -1,6 +1,7 @@
 pub type WhyResult<T> = Result<T, WhyError>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum WhyError {
     OutOfMemory,

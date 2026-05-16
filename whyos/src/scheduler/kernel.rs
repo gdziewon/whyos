@@ -1,7 +1,7 @@
 use core::num::NonZero;
 
 use crate::{ResumeContext, TaskState, error::{WhyError, WhyResult}, scheduler::ContextSwitch, task::{BlockReason, TaskHandle, TaskId, TaskMap, TaskMask, TaskRegistry, TaskStack, Tcb, Watchdog}};
-
+use crate::utils::log;
 use super::idle::IdleTask;
 
 pub const MAX_TASKS: usize = TaskMask::BITS as usize;
@@ -54,6 +54,7 @@ impl Kernel {
 
     pub fn on_tick(&mut self) -> u64 {
         let now = self.tick();
+        log::trace!("on_tick {}", now);
 
         // wake up sleeping tasks
         for tid in self.blocked.iter() {
@@ -61,6 +62,7 @@ impl Kernel {
 
             if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state {
                 if wakup_time.get() <= now {
+                    log::debug!("Unblocking task {} at tick {}", tid.id(), now);
                     self.unblock_task(tid)
                 }
             }
@@ -77,13 +79,17 @@ impl Kernel {
     fn wdt_check(&mut self, tid: TaskId) { // todo: maybe this should just return result?
         let task = self.registry.get_task_mut_unchecked(tid);
 
+        log::trace!("wdt_check {}", tid.id());
+
         if let Some(watchdog) = task.watchdog.as_mut() {
             if watchdog.check_n_tick() {
-                defmt::warn!(
-                    "WhyOS: Task {} didn't feed the watchdog for {} ticks - killing it",
+                log::warn!(
+                    "wdt: task {} didn't feed the watchdog for {} ticks - killing it",
                     tid.id(), watchdog.interval()
                 );
                 self.make_zombie(tid);
+            } else {
+                log::debug!("wdt: task {} still alive", tid.id());
             }
         }
     }
@@ -111,6 +117,8 @@ impl Kernel {
         self.blocked.add(tid);
         self.ready.remove(tid);
 
+        log::debug!("Blocking task {}: {:?}", tid.id(), reason);
+
         ContextSwitch::yield_if(self.current_task == Some(tid)) // self-block
     }
 
@@ -121,7 +129,9 @@ impl Kernel {
             task.state = TaskState::Ready;
             self.blocked.remove(tid);
             self.ready.add(tid);
+            log::debug!("Unblocked task {}", tid.id());
         } else {
+            log::error!("WhyOS: Waking non blocked task {}", tid.id());
             panic!("WhyOS: Waking non blocked task, should never happen")
         }
     }
@@ -131,6 +141,8 @@ impl Kernel {
 
         // systime >=0, ticks >= 1 and saturating add, so this is safe
         let wakeup_time = unsafe { NonZero::new_unchecked(target_time) };
+
+        log::debug!("Task {} sleeping until {}", tid.id(), wakeup_time.get());
 
         self.block_task(tid, BlockReason::Sleep(wakeup_time)) // self-sleep
     }
@@ -149,6 +161,7 @@ impl Kernel {
         }
 
         let ctx: ResumeContext = task.state.try_into()?;
+        log::debug!("Suspending task {}", h.tid().id());
         task.state = TaskState::Suspended(ctx);
 
         self.ready.remove(h.tid());
@@ -168,6 +181,8 @@ impl Kernel {
         let TaskState::Suspended(ctx) = task.state else {
             return Ok(ContextSwitch::Continue);
         };
+
+        log::debug!("Resuming task {}", tid.id());
 
         match ctx {
             ResumeContext::Ready => {
@@ -189,6 +204,7 @@ impl Kernel {
             ResumeContext::Blocked(_reason @ BlockReason::WaitQueue) => {
                 task.state = TaskState::Ready; // if blocked on waitqueue, go to ready - issues with lost wakeup
                 self.ready.add(tid);
+                log::debug!("Resumed task {} from waitqueue", tid.id());
                 Ok(ContextSwitch::Yield)
             }
         }
@@ -204,6 +220,8 @@ impl Kernel {
         let handle = self.registry.allocate(name, priority, stack)?;
 
         self.ready.add(handle.tid());
+
+        log::info!("Spawned task {} name={:?} prio={}", handle.tid().id(), name, priority);
 
         Ok(handle)
     }
@@ -230,6 +248,8 @@ impl Kernel {
         let task = self.registry.get_task_mut_unchecked(tid);
         task.state = TaskState::Zombie;
 
+        log::debug!("Task {} made zombie", tid.id());
+
         ContextSwitch::yield_if(self.current_task == Some(tid)) // self-remove
     }
 
@@ -237,6 +257,7 @@ impl Kernel {
         for tid in self.zombies.iter() {
             self.zombies.remove(tid);
             let _ = self.registry.deallocate(tid);
+            log::debug!("Reaped task {} memory", tid.id());
         }
     }
 

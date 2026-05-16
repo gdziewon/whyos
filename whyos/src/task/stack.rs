@@ -36,6 +36,13 @@ impl<M: MemChunk> Stack<M> {
         unsafe { ptr::write(frame_ptr, init_frame); }
         unsafe { *stack_u32 = STACK_CANARY; }
 
+        crate::utils::log::debug!(
+            "Stack initialized: base=0x{:08X}, top=0x{:08X}, size={} bytes, initial_sp=0x{:08X}",
+            mem.ptr() as usize,
+            stack_top as usize,
+            mem.size(),
+            frame_ptr as usize
+        );
         Self { mem, sp: frame_ptr as usize }
     }
 

@@ -2,6 +2,7 @@ use core::{cell::{RefCell, UnsafeCell}, mem::MaybeUninit};
 use critical_section::Mutex as CSMutex;
 
 use crate::{scheduler, itc::WaitQueue};
+use crate::utils::log;
 
 pub struct Queue<T, const N: usize> {
     data: UnsafeCell<MaybeUninit<[T; N]>>,
@@ -47,10 +48,12 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                 let mut state = self.state.borrow_ref_mut(cs);
 
                 if state.count == CAPACITY { // queue is full, cant send
+                    log::debug!("Queue full, producer blocking");
                     state.prod_waiting.block_current();
                     true
 
                 } else {
+                    log::trace!("Queue send success");
                     let val = item_slot.take().unwrap(); // unwrap is safe bcs we know we haven't sent it yet
 
                     let maybe_ptr = self.data.get();
@@ -88,6 +91,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             let mut state = self.state.borrow_ref_mut(cs);
 
             if state.count == CAPACITY {
+                log::trace!("Queue try_send failed - full");
                 return Err(item); // full queue
             }
 
@@ -102,6 +106,8 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
 
             state.cons_waiting.wake_highest_prio(); // wont yield here, caller should do it manually if needed
 
+            log::trace!("Queue try_send success, count {}", state.count);
+
             Ok(())
         })
     }
@@ -115,10 +121,12 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
                 let mut state = self.state.borrow_ref_mut(cs);
 
                 if state.count == 0 { // no data to receive = block
+                    log::debug!("Queue empty, consumer blocking");
                     state.cons_waiting.block_current();
                     false
 
                 } else { // get data
+                    log::trace!("Queue receive success");
                     let maybe_ptr = self.data.get();
 
                     received_data = unsafe {
@@ -153,6 +161,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
             let mut state = self.state.borrow_ref_mut(cs);
 
             if state.count == 0 {
+                log::trace!("Queue try_receive - empty");
                 return None; // queue empty
             }
 
@@ -167,6 +176,7 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
 
             state.prod_waiting.wake_highest_prio(); // wont yield here, caller should do it manually if needed
 
+            log::trace!("Queue try_receive success, count {}", state.count);
             Some(val)
         })
     }

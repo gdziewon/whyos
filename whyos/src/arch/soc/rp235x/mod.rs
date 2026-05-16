@@ -2,6 +2,7 @@
 mod timer;
 
 use crate::arch::KernelArch;
+use crate::utils::log;
 
 pub struct SocArch;
 
@@ -10,6 +11,7 @@ impl KernelArch for SocArch {
     const HEAP_KB: usize = 256;
 
     unsafe fn init(tick_hz: u32) {
+        log::trace!("Arch initializing SysTick with {} Hz", tick_hz);
         use cortex_m::peripheral::syst::SystClkSource;
         let mut core = unsafe { cortex_m::Peripherals::steal() };
         let syst = &mut core.SYST;
@@ -25,6 +27,7 @@ impl KernelArch for SocArch {
     fn tick(_interval_hz: u32) {} // systick auto-reloads
 
     fn set_tick_freq(freq: u32) {
+        log::trace!("Arch change system freq to {} Hz", freq);
         let mut core = unsafe { cortex_m::Peripherals::steal() };
         let syst = &mut core.SYST;
         let interval_us = 1_000_000 / freq;
@@ -33,6 +36,7 @@ impl KernelArch for SocArch {
     }
 
     unsafe fn start() -> ! {
+        log::trace!("Arch calling SVC to bootstrap scheduler");
         unsafe { core::arch::asm!("svc 0", options(noreturn)) }
     }
 }
@@ -42,6 +46,7 @@ impl KernelArch for SocArch {
     const HEAP_KB: usize = 256;
 
     unsafe fn init(tick_hz: u32) {
+        log::trace!("Arch initializing trap handler and SioTimer with {} Hz", tick_hz);
         unsafe {
             riscv::register::mtvec::write(
                 crate::arch::trap_entry as *const () as usize,
@@ -57,17 +62,19 @@ impl KernelArch for SocArch {
     }
 
     fn set_tick_freq(freq: u32) {
+        log::trace!("Arch change system freq to {} Hz", freq);
         timer::SioTimer::schedule_next(freq);
     }
 
     unsafe fn start() -> ! {
-    unsafe {
-        core::arch::asm!(
-            "call get_idle_task_sp",
-            "mv sp, a0",
-            "j restore_context", // assumes there is restore_context somehwere
-            options(noreturn)
-        )
+        log::trace!("Arch scheduler bootstrap");
+        unsafe {
+            core::arch::asm!(
+                "call get_idle_task_sp",
+                "mv sp, a0",
+                "j restore_context", // assumes there is restore_context somehwere
+                options(noreturn)
+            )
+        }
     }
-}
 }

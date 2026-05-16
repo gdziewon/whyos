@@ -1,7 +1,7 @@
 use core::{cell::UnsafeCell, mem::MaybeUninit};
 
 use critical_section::Mutex;
-use crate::utils::MultiBitmap;
+use crate::utils::{MultiBitmap, log};
 use crate::arch::{KernelArch as _, TargetArch};
 
 const BLOCK_SIZE: usize = 1024; // 1kb
@@ -75,6 +75,7 @@ unsafe impl Send for AllocatedMemory {}
 pub fn alloc(size: usize) -> Option<AllocatedMemory> {
     let blocks = size.div_ceil(BLOCK_SIZE);
     if blocks == 0 || blocks > MAX_BLOCKS {
+        log::warn!("Memory alloc request invalid: {} bytes", size);
         return None;
     }
 
@@ -86,6 +87,7 @@ pub fn alloc(size: usize) -> Option<AllocatedMemory> {
             let ptr = unsafe {
                 pool.buffer.as_mut_ptr().cast::<u8>().add(start * BLOCK_SIZE)
             };
+            log::debug!("Memory alloc: {} bytes ({} blocks) at start {}", size, blocks, start);
             AllocatedMemory { ptr, size: blocks * BLOCK_SIZE }
         })
     })
@@ -98,5 +100,6 @@ fn dealloc(chunk: &mut AllocatedMemory) {
         let start_bit = (chunk.ptr as usize - base) / BLOCK_SIZE;
         let blocks    = chunk.size / BLOCK_SIZE; // always exact
         pool.bitmap.clear_range(start_bit, blocks);
+        log::debug!("Memory dealloc: {} bytes ({} blocks) at start {}", chunk.size, blocks, start_bit);
     });
 }

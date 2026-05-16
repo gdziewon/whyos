@@ -3,6 +3,7 @@ use core::cell::RefCell;
 use critical_section::Mutex as CSMutex;
 
 use crate::{scheduler, itc::WaitQueue};
+use crate::utils::log;
 
 pub struct Semaphore {
     state: CSMutex<RefCell<SemState>>
@@ -50,9 +51,11 @@ impl Semaphore {
                 if state.permits > 0 { // some permits left
                     state.permits -= 1;
                     state.waiting.remove_current(); // needed for weird stuff with suspend/resume FIXME
+                    log::debug!("Semaphore acquired, remaining permits {}", state.permits);
                     true
                 } else { // NO PERMITS
                     state.waiting.block_current();
+                    log::debug!("Semaphore blocking current task - no permits");
                     false
                 }
             });
@@ -72,8 +75,10 @@ impl Semaphore {
 
             if state.permits > 0 {
                 state.permits -= 1;
+                log::trace!("Semaphore try_wait success, remaining {}", state.permits);
                 true
             } else {
+                log::trace!("Semaphore try_wait failed, no permits");
                 false
             }
         })
@@ -86,12 +91,14 @@ impl Semaphore {
 
             if state.permits < state.capacity {
                 state.permits += 1;
+                log::debug!("Semaphore signalled, permits {}", state.permits);
             }
 
             state.waiting.wake_highest_prio()
         });
 
         if someone_waiting {
+            log::debug!("Semaphore signal woke waiting task");
             scheduler::yield_now();
         }
     }

@@ -11,6 +11,7 @@ pub use riscv32::*;
 pub mod soc;
 
 use crate::scheduler::Kernel;
+use crate::utils::log;
 
 #[allow(dead_code)]
 pub trait KernelArch {
@@ -25,6 +26,7 @@ pub trait KernelArch {
 pub type TargetArch = soc::SocArch;
 
 pub unsafe fn start_os(freq: u32) -> ! {
+    log::debug!("Arch start");
     unsafe {
         TargetArch::init(freq);
         TargetArch::start()

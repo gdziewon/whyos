@@ -5,6 +5,7 @@ use crate::error::WhyResult;
 use crate::scheduler::{self, Kernel};
 use crate::task::TaskId;
 use crate::{TaskBuilder, TaskHandle, TaskRoutine};
+use crate::utils::log;
 
 // TODO: Add docs
 
@@ -50,6 +51,8 @@ impl Freq {
 /// This function enforces strict one-shot initialization. It will `panic!` if
 /// called more than once to prevent hardware and kernel state corruption.
 pub fn start(freq: Freq) -> ! {
+    log::info!("Starting WhyOS at {} Hz", freq.as_hz());
+    log::debug!("WhyOS build ident: {}", build_name());
     Kernel::init(freq.as_hz());
     unsafe { arch::start_os(freq.as_hz()) }
 }
@@ -59,6 +62,7 @@ pub fn start(freq: Freq) -> ! {
 /// This will dynamically update the internal scheduling frequency.
 pub fn set_tick_freq(freq: Freq) {
     use crate::arch::KernelArch;
+    log::debug!("Set tick freq to {} Hz", freq.as_hz());
     Kernel::lock(|k| k.set_timer_interval(freq.as_hz()));
     arch::TargetArch::set_tick_freq(freq.as_hz());
 }
@@ -73,6 +77,7 @@ pub fn tick_freq() -> u32 {
 
 #[inline]
 pub fn yield_cpu() {
+    log::trace!("manual yield");
     scheduler::yield_now();
 }
 
@@ -80,6 +85,7 @@ pub fn yield_cpu() {
 pub fn sleep(ticks: u64) {
     if let Some(ticks) = NonZero::new(ticks) {
         let curr = current_tid();
+        log::debug!("Sleep task {} ticks {}", curr.id(), ticks.get());
         Kernel::lock(|k| {
             k.sleep_task(curr, ticks);
         });
@@ -96,6 +102,7 @@ pub fn sleep(ticks: u64) {
 #[inline]
 pub fn exit() -> ! {
     let curr = current_tid();
+    log::info!("Task {} exit", curr.id());
     Kernel::lock(|k| k.make_zombie(curr));
     scheduler::yield_now();
     loop {}
@@ -111,7 +118,8 @@ pub(crate) fn current_tid() -> TaskId {
 pub fn my_handle() -> TaskHandle {
     let curr = current_tid();
     Kernel::lock(|k| {
-        k.handle(curr).expect("WhyOS: Current task invalid")
+        k.handle(curr)
+            .expect("WhyOS: Current task invalid")
     })
 }
 
@@ -135,6 +143,7 @@ pub fn reclaim_memory() {
 pub fn wdt_sub(interval_ticks: u64) {
     if let Some(ticks) = NonZero::new(interval_ticks) {
         let curr = current_tid();
+        log::debug!("Task {} wdt subscribe", curr.id());
         Kernel::lock(|k| {
             k.wdt_sub(curr, ticks);
         })
@@ -145,6 +154,7 @@ pub fn wdt_sub(interval_ticks: u64) {
 pub fn wdt_unsub() {
     let curr = current_tid();
     Kernel::lock(|k| {
+        log::debug!("Task {} wdt unsubscribe", curr.id());
         k.wdt_unsub(curr);
     })
 }
@@ -153,12 +163,14 @@ pub fn wdt_unsub() {
 pub fn wdt_feed() {
     let curr = current_tid();
     Kernel::lock(|k| {
+        log::trace!("Task {} wdt feed", curr.id());
         k.wdt_feed(curr);
     })
 }
 
 #[inline]
 pub fn reboot() -> ! {
+    log::info!("Performing reboot");
     arch::reset();
 }
 

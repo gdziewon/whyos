@@ -1,6 +1,7 @@
 use core::panic::PanicInfo;
 use crate::yield_cpu;
 use crate::scheduler::Kernel;
+use crate::utils::log;
 
 use crate::arch::{is_in_task, bkpt, wfi};
 
@@ -11,7 +12,7 @@ fn panic(info: &PanicInfo) -> ! {
 
     if is_task {
         if let Some(tid) = Kernel::try_lock(|k| k.current_task()).flatten() {
-            defmt::warn!("WhyOS: Task {} panicked: {}", tid.id(), info);
+            log::warn!("WhyOS: Task {} panicked: {}", tid.id(), info);
 
             let _ = Kernel::lock(|k| k.make_zombie(tid));
             yield_cpu();
@@ -20,13 +21,13 @@ fn panic(info: &PanicInfo) -> ! {
                 wfi();
             }
         } else {
-            defmt::error!("WhyOS: Idle task panic: {}", info);
+            log::error!("WhyOS: Idle task panic: {}", info);
             loop {
                 bkpt();
             }
         }
     } else {
-        defmt::error!("WhyOS: KERNEL PANIC: {}", info);
+        log::error!("WhyOS: KERNEL PANIC: {}", info);
         loop {
             bkpt();
         }

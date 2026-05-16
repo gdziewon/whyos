@@ -24,7 +24,8 @@ pub enum Interrupt {
 }
 
 #[allow(dead_code)]
-#[derive(defmt::Format, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Exception {
     InstructionAddressMisaligned,
     InstructionAccessFault,
@@ -101,7 +102,7 @@ extern "C" fn trap_handler(sp: usize, mcause: u32, mtval: u32) -> usize {
             sp // its a breakpoint, dont context switchx
         }
         TrapCause::Exception(e) => {
-            defmt::error!("WhyOS: FATAL: exc: {}, mepc: {:X}, mtval: {:X}", e, frame.mepc, mtval);
+            crate::utils::log::error!("WhyOS: FATAL: exc: {}, mepc: {:X}, mtval: {:X}", e, frame.mepc, mtval);
             crate::arch::bkpt();
             loop { crate::arch::wfi(); }
         }

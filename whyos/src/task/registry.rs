@@ -1,6 +1,7 @@
 use crate::{TaskState, WhyError, error::WhyResult, task::{TaskHandle, TaskStack, TaskId}, utils::Bitmap};
 use core::{num::NonZero, ops::{Index, IndexMut}};
 use crate::scheduler::MAX_TASKS;
+use crate::utils::log;
 
 pub type TaskMask = u32;
 pub type Gen = u8;
@@ -21,19 +22,26 @@ impl TaskRegistry {
         priority: u8,
         stack: TaskStack
     ) -> WhyResult<TaskHandle> {
-        let tid = self.allocated
-            .first_free()
-            .ok_or(WhyError::MaxTasksReached)?;
+        let tid = match self.allocated.first_free() {
+            Some(t) => t,
+            None => {
+                log::warn!("Task allocate failed: max tasks reached");
+                return Err(WhyError::MaxTasksReached);
+            }
+        };
 
         self.allocated.add(tid);
         self.tasks[tid].revive(name, priority, stack);
 
-        Ok(TaskHandle::new(tid, self.tasks[tid].generation))
+        let handle = TaskHandle::new(tid, self.tasks[tid].generation);
+        log::debug!("Allocated task {} name={:?} prio={}", tid.id(), name, priority);
+        Ok(handle)
     }
 
     pub fn deallocate(&mut self, tid: TaskId) -> WhyResult<()> {
         self.allocated.remove(tid);
         self.tasks[tid].kill();
+        log::debug!("Deallocated task {}", tid.id());
         Ok(())
     }
 

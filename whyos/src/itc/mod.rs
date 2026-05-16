@@ -7,6 +7,7 @@ pub use queue::Queue;
 pub use sem::Semaphore;
 
 use crate::{TaskState, scheduler::Kernel, task::{TaskMap, BlockReason}};
+use crate::utils::log;
 
 #[repr(transparent)]
 struct WaitQueue {
@@ -48,6 +49,7 @@ impl WaitQueue {
                 .min_by_key(|&tid| unsafe { k.task_unchecked(tid).priority });
 
             if let Some(tid) = best_task {
+                log::debug!("itc: waking highest prio task {}", tid.id());
                 self.waiting.remove(tid);
                 k.unblock_task(tid);
                 true

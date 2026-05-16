@@ -35,4 +35,4 @@ rustflags = [
 runner = "picotool load -u -v -x -t elf"
 
 [env]
-DEFMT_LOG = "trace" # enable all log levels
+DEFMT_LOG = "info"

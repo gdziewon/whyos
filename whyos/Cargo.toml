@@ -8,8 +8,8 @@ default = ["rp235x"]
 rp235x = []
 
 [dependencies]
-critical-section = "1.2.0"
-defmt = "1.0.1"
+critical-section = "1.2"
+defmt = { version = "1.0", optional = true }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = "0.7"

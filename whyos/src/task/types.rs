@@ -7,7 +7,8 @@ use crate::{scheduler::MAX_TASKS};
 use crate::{error::WhyResult, scheduler::{self, ContextSwitch, Kernel}, task::registry::Gen};
 
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, defmt::Format)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(transparent)]
 pub struct TaskId(usize); // todo: maybe should be u16, but usize is fast
 
@@ -154,13 +155,15 @@ impl TaskInfo {
 }
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum BlockReason {
     Sleep(NonZero<u64>),
     WaitQueue,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TaskState {
     Ready,
     Running,
@@ -185,7 +188,8 @@ impl fmt::Display for TaskState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ResumeContext {
     Ready,
     Blocked(BlockReason),
