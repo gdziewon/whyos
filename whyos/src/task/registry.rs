@@ -1,4 +1,4 @@
-use crate::{TaskId, TaskState, WhyError, error::WhyResult, task::{TaskHandle, TaskStack}, utils::Bitmap};
+use crate::{TaskState, WhyError, error::WhyResult, task::{TaskHandle, TaskStack, TaskId}, utils::Bitmap};
 use core::{num::NonZero, ops::{Index, IndexMut}};
 use crate::scheduler::MAX_TASKS;
 

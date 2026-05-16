@@ -3,6 +3,10 @@ use critical_section::Mutex as CSMutex;
 
 use crate::{itc::WaitQueue, scheduler};
 
+/// A mutual exclusion primitive useful for protecting shared data.
+///
+/// This mutex will block tasks waiting for the lock to become available.
+/// The highest priority task will be woken up first when the lock is released.
 pub struct Mutex<T> {
     data: UnsafeCell<T>,
     state: CSMutex<RefCell<MutexState>>
@@ -22,6 +26,11 @@ impl MutexState {
     }
 }
 
+/// An RAII implementation of a "scoped lock" of a mutex. When this structure is
+/// dropped (falls out of scope), the lock will be unlocked.
+///
+/// The data protected by the mutex can be accessed through this guard via its
+/// `Deref` and `DerefMut` implementations.
 pub struct MutexGuard<'a, T> {
     lock: &'a Mutex<T>,
 }
@@ -52,6 +61,7 @@ impl<T> Drop for MutexGuard<'_, T> {
 unsafe impl<T: Send> Sync for Mutex<T> {}
 
 impl<T> Mutex<T> {
+    /// Creates a new `Mutex` in an unlocked state containing the given data.
     pub const fn new(data: T) -> Self {
         Self {
             data: UnsafeCell::new(data),
@@ -59,7 +69,10 @@ impl<T> Mutex<T> {
         }
     }
 
-    // returns MutexGuard which releases the lock when it goes out of scope
+    /// Acquires a mutex, blocking the current task until it is able to do so.
+    ///
+    /// This function will block the calling task until it is available to acquire the mutex.
+    /// Upon returning, the task is the only one with the mutex held.
     pub fn lock(&self) -> MutexGuard<'_, T> {
         // loop is needed since if the acquisition fails, task should check from the start
         loop {
@@ -86,6 +99,7 @@ impl<T> Mutex<T> {
         }
     }
 
+    /// Attempts to acquire this `lock` without blocking.
     #[inline]
     pub fn try_lock(&self) -> Option<MutexGuard<'_, T>> {
         critical_section::with(|cs| {
@@ -100,6 +114,7 @@ impl<T> Mutex<T> {
         })
     }
 
+    /// Checks if the lock is currently held by any task.
     #[inline]
     pub fn is_locked(&self) -> bool {
         critical_section::with(|cs| {

@@ -30,7 +30,7 @@ fn test_suspend_resume() -> TestResult {
 
     check!(val_suspended == val_before, "Worker ran while suspended: before={}, suspended={}", val_before, val_suspended);
 
-    info.handle.resume();
+    info.handle.resume().unwrap();
     whyos::sleep(50);
 
     let val_after = COUNTER.load(Ordering::Relaxed);
@@ -119,7 +119,7 @@ extern "C" fn mutex_waiter_low(high_tid: u32) {
     LOW_RAN.store(1, Ordering::Relaxed);
 
     let h = TaskHandle::from_u32(high_tid).unwrap();
-    h.resume();
+    h.resume().unwrap();
 }
 
 static STOP_FEEDING: AtomicBool = AtomicBool::new(false);

@@ -2,7 +2,7 @@ mod mutex;
 mod queue;
 mod sem;
 
-pub use mutex::Mutex;
+pub use mutex::{Mutex, MutexGuard};
 pub use queue::Queue;
 pub use sem::Semaphore;
 
@@ -19,7 +19,7 @@ impl WaitQueue {
     }
 
     pub fn block_current(&mut self) {
-        let curr = crate::current_tid();
+        let curr = crate::syscall::current_tid();
         Kernel::lock(|k| {
             self.waiting.add(curr);
             k.block_task(curr, BlockReason::WaitQueue);

@@ -191,7 +191,7 @@ static COMMANDS: &[Cmd] = &[
         action: |cmd, args, _| {
             let args = args.trim();
             if args.is_empty() {
-                uprintln!("{} Hz", whyos::tick_freq().as_hz());
+                uprintln!("{} Hz", whyos::tick_freq());
             } else if let Ok(freq) = args.parse::<u32>() {
                 if let Some(freq) = whyos::Freq::from_hz(freq) {
                     whyos::set_tick_freq(freq);

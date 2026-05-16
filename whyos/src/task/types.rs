@@ -1,3 +1,7 @@
+use core::fmt;
+use core::num::NonZero;
+
+use crate::WhyError;
 use crate::task::Tcb;
 use crate::{scheduler::MAX_TASKS};
 use crate::{error::WhyResult, scheduler::{self, ContextSwitch, Kernel}, task::registry::Gen};
@@ -149,12 +153,7 @@ impl TaskInfo {
     }
 }
 
-use core::{fmt, num::NonZero};
 
-use crate::error::WhyError;
-
-
-// inspired by https://freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/02-Task-states
 #[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum BlockReason {
     Sleep(NonZero<u64>),
