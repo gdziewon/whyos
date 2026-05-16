@@ -95,10 +95,10 @@ pub fn alloc(size: usize) -> Option<AllocatedMemory> {
 
 fn dealloc(chunk: &mut AllocatedMemory) {
     critical_section::with(|cs| {
-        let pool      = unsafe { &mut *MEMORY.borrow(cs).get() };
-        let base      = pool.buffer.as_mut_ptr() as usize;
+        let pool = unsafe { &mut *MEMORY.borrow(cs).get() };
+        let base = pool.buffer.as_mut_ptr() as usize;
         let start_bit = (chunk.ptr as usize - base) / BLOCK_SIZE;
-        let blocks    = chunk.size / BLOCK_SIZE; // always exact
+        let blocks = chunk.size / BLOCK_SIZE; // always exact
         pool.bitmap.clear_range(start_bit, blocks);
         log::debug!("Memory dealloc: {} bytes ({} blocks) at start {}", chunk.size, blocks, start_bit);
     });

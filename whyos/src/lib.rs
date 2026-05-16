@@ -41,6 +41,7 @@
 //! ```
 //!
 #![no_std]
+#![allow(dead_code, unused)] // to make it easier with managing features
 
 mod arch;
 mod scheduler;

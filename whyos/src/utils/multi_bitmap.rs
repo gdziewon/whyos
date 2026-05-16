@@ -85,10 +85,8 @@ impl<const N: usize> MultiBitmap<N> {
             }
 
             // len < 64 try a run entirely within this word
-            if len <= 64 {
-                if let Some(bit) = word.find_first_fit(len) {
-                    return Some(word_start + bit);
-                }
+            if len <= 64 && let Some(bit) = word.find_first_fit(len) {
+                return Some(word_start + bit);
             }
 
             // free bits at the end of this word - seed the next cross-word

@@ -5,13 +5,14 @@ use whyos_demo::{board::{Board, LedPin}};
 use embedded_hal::digital::StatefulOutputPin as _;
 use whyos_demo::hal::entry;
 
-static mut LED_STORAGE: Option<LedPin> = None;
 
-#[unsafe(no_mangle)]
-extern "C" fn blinky_task(led_opt: &'static mut Option<LedPin>) {
-    let led = led_opt.as_mut().expect("LED not initialized!");
+extern "C" fn blinky_task(leds: &'static whyos::Mutex<Option<LedPin>>) {
 
     loop {
+        let mut led_slot = leds.lock();
+        let led = led_slot.as_mut()
+            .expect("LED not initialized!");
+
         let _ = led.toggle();
         whyos::sleep(200);
     }
@@ -21,15 +22,14 @@ extern "C" fn blinky_task(led_opt: &'static mut Option<LedPin>) {
 fn main() -> ! {
     let board = Board::init();
 
-    unsafe {
-        LED_STORAGE = Some(board.led);
-        let led_ref = &mut *(&raw mut LED_STORAGE);
+    static LED_STORAGE: whyos::Mutex<Option<LedPin>> = whyos::Mutex::new(None);
+    *LED_STORAGE.lock() = Some(board.led);
 
-        whyos::TaskBuilder::with_static_mut(blinky_task, led_ref)
-            .name("blinky")
-            .spawn()
-            .expect("Failed to spawn blinky");
-    }
+    whyos::TaskBuilder::with_static_ref(blinky_task, &LED_STORAGE)
+        .name("blinky")
+        .spawn()
+        .expect("Failed to spawn blinky");
+
 
     #[cfg(feature = "shell")]
     whyos_demo::shell::init_shell(board.uart);

@@ -111,7 +111,7 @@ pub fn exit() -> ! {
     log::info!("Task {} exit", curr.id());
     Kernel::lock(|k| k.make_zombie(curr));
     scheduler::yield_now();
-    loop {}
+    loop { arch::wfi(); }
 }
 
 /// Returns the task id of the currently running task.
@@ -159,6 +159,7 @@ pub fn reclaim_memory() {
 /// Subscribes the current task to the watchdog with the given interval.
 ///
 /// A value of `0` is ignored.
+#[cfg(feature = "software-watchdog")]
 #[inline]
 pub fn wdt_sub(interval_ticks: u64) {
     if let Some(ticks) = NonZero::new(interval_ticks) {
@@ -171,6 +172,7 @@ pub fn wdt_sub(interval_ticks: u64) {
 }
 
 /// Unsubscribes the current task from the watchdog.
+#[cfg(feature = "software-watchdog")]
 #[inline]
 pub fn wdt_unsub() {
     let curr = current_tid();
@@ -181,6 +183,7 @@ pub fn wdt_unsub() {
 }
 
 /// Feeds the watchdog for the current task.
+#[cfg(feature = "software-watchdog")]
 #[inline]
 pub fn wdt_feed() {
     let curr = current_tid();

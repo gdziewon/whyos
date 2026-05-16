@@ -43,7 +43,7 @@ impl Kernel {
 
     pub fn allocated(&self) -> TaskMap { self.registry.allocated_map() }
     pub fn handle(&self, tid: TaskId) -> WhyResult<TaskHandle> { self.registry.handle(tid) }
-    pub fn task(&self, h: &TaskHandle) -> WhyResult<&Tcb> { self.registry.get_task(&h) }
+    pub fn task(&self, h: &TaskHandle) -> WhyResult<&Tcb> { self.registry.get_task(h) }
     pub unsafe fn task_unchecked(&self, tid: TaskId) -> &Tcb { self.registry.get_task_unchecked(tid) }
 
 
@@ -61,15 +61,16 @@ impl Kernel {
         for tid in self.blocked.iter() {
             let task = self.registry.get_task_mut_unchecked(tid);
 
-            if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state {
-                if wakup_time.get() <= now {
+            if let TaskState::Blocked(BlockReason::Sleep(wakup_time)) = task.state
+                && wakup_time.get() <= now {
                     log::debug!("Unblocking task {} at tick {}", tid.id(), now);
                     self.unblock_task(tid)
-                }
+
             }
         }
 
         // software watchdog monitoring - ONLY FOR READY TASKS
+        #[cfg(feature = "software-watchdog")]
         for tid in self.ready.iter() { // todo: watchdog should be behind feature
             self.wdt_check(tid);
         }
@@ -77,6 +78,7 @@ impl Kernel {
         now
     }
 
+    #[cfg(feature = "software-watchdog")]
     fn wdt_check(&mut self, tid: TaskId) {
         let task = self.registry.get_task_mut_unchecked(tid);
 
@@ -95,16 +97,19 @@ impl Kernel {
         }
     }
 
+    #[cfg(feature = "software-watchdog")]
     pub fn wdt_sub(&mut self, tid: TaskId, interval: NonZero<u64>) {
         let task = self.registry.get_task_mut_unchecked(tid);
         task.watchdog = Some(Watchdog::new(interval));
     }
 
+    #[cfg(feature = "software-watchdog")]
     pub fn wdt_unsub(&mut self, tid: TaskId) {
         let task = self.registry.get_task_mut_unchecked(tid);
         task.watchdog = None;
     }
 
+    #[cfg(feature = "software-watchdog")]
     pub fn wdt_feed(&mut self, tid: TaskId) {
         let task = self.registry.get_task_mut_unchecked(tid);
         if let Some(watchdog) = task.watchdog.as_mut() {
@@ -151,7 +156,7 @@ impl Kernel {
 
     /// COLD PATH with handles
     pub fn suspend_task(&mut self, h: &TaskHandle) -> WhyResult<ContextSwitch> {
-        let task = self.registry.get_task_mut(&h)?;
+        let task = self.registry.get_task_mut(h)?;
         if task.state == TaskState::Zombie { // shouldn't suspend zombies
              return Err(WhyError::InvalidHandle);
         }
@@ -228,7 +233,7 @@ impl Kernel {
     }
 
     pub fn kill_task(&mut self, h: &TaskHandle) -> WhyResult<ContextSwitch> {
-        let tid = self.registry.validate(&h)?;
+        let tid = self.registry.validate(h)?;
         Ok(self.make_zombie(tid))
     }
 
@@ -268,7 +273,7 @@ impl Kernel {
             let curr_task = self.registry.get_task_mut_unchecked(curr);
             if let Some(stack) = curr_task.stack.as_mut() {
                 if !stack.check_canary() {
-                    panic!("KERNEL PANIC: Stack Overflow detected in Task {}", curr.id());
+                    panic!("WhyOS: Stack Overflow detected in Task {}", curr.id());
                 }
 
                 stack.set_sp(old_sp);

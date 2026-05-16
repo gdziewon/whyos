@@ -61,7 +61,7 @@ impl<'a> Shell<'a> { // todo: validate no duplicate names on user_progs
                         let (cmd_name, args) = text.split_once(' ').unwrap_or((text, ""));
 
                         if let Some(cmd) = Cmd::parse(cmd_name) {
-                            let mut env = Env { user_programs: &self.user_programs, last_task: &mut self.last_task };
+                            let mut env = Env { user_programs: self.user_programs, last_task: &mut self.last_task };
                             cmd.run(args, &mut env);
                         } else {
                             uprintln!("Unknown command: '{}'. Type 'help' for a list of commands.", cmd_name);

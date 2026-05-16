@@ -320,7 +320,7 @@ fn parse_id(args: &str) -> Option<TaskHandle> {
     let args = args.trim();
     if args.is_empty() { return None; }
 
-    args.parse::<u32>().ok().and_then(|id| TaskHandle::from_u32(id))
+    args.parse::<u32>().ok().and_then(TaskHandle::from_u32)
 }
 
 fn parse_hex(args: &str) -> Option<usize> {

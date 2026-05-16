@@ -216,3 +216,9 @@ impl<T: Send, const CAPACITY: usize> Queue<T, CAPACITY> {
         self.len() == CAPACITY
     }
 }
+
+impl<T: Send, const CAPACITY: usize> Default for Queue<T, CAPACITY> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

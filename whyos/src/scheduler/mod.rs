@@ -1,5 +1,7 @@
 mod idle;
 mod kernel;
+
+#[cfg(feature = "task-panic-recovery")]
 mod panic;
 
 use core::{cell::RefCell, sync::atomic::AtomicBool};

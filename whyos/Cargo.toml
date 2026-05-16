@@ -6,6 +6,8 @@ edition = "2024"
 [features]
 default = ["rp235x"]
 rp235x = []
+task-panic-recovery = []
+software-watchdog = []
 
 [dependencies]
 critical-section = "1.2"

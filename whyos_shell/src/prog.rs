@@ -25,7 +25,7 @@ extern "C" fn prog_fib(mut num: usize) {
         num -= 1;
     }
 
-    uprintln!("{}", a);
+    uprintln!("{}", a); // this printing u128 adds 2KiB to binary btw
 }
 
 extern "C" fn prog_counter(mut count: usize) {

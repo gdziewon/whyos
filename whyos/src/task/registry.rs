@@ -178,8 +178,9 @@ pub struct Tcb { // task control block
     pub(crate) state: TaskState,
     pub(crate) priority: u8, // lower number = higher priority
     pub(crate) stack: Option<TaskStack>,
+    pub(crate) generation: Gen,
+    #[cfg(feature = "software-watchdog")]
     pub(crate) watchdog: Option<Watchdog>,
-    pub(crate) generation: Gen
 }
 
 impl Tcb {
@@ -189,6 +190,7 @@ impl Tcb {
             state: TaskState::Dead,
             priority: u8::MAX,
             stack: None,
+            #[cfg(feature = "software-watchdog")]
             watchdog: None,
             generation: Gen::MIN
         }
@@ -200,6 +202,7 @@ impl Tcb {
             state: TaskState::Ready,
             priority,
             stack: Some(stack),
+            #[cfg(feature = "software-watchdog")]
             watchdog: None,
             generation: self.generation
         }
@@ -211,6 +214,7 @@ impl Tcb {
             state: TaskState::Dead,
             priority: u8::MAX,
             stack: None,
+            #[cfg(feature = "software-watchdog")]
             watchdog: None,
             generation: self.generation.wrapping_add(1)
         }

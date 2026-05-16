@@ -11,7 +11,7 @@ fn main() {
     let soc = if env::var("CARGO_FEATURE_RP235X").is_ok() {
         "rp235x"
     } else {
-        "rp235x"// we support only rp235x for now
+        panic!("Unsupported SoC") // we support only rp235x for now
     };
 
     let linker_script_name = match target_arch.as_str() {
