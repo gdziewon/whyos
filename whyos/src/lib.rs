@@ -3,7 +3,7 @@
 //! It provides a preemptive, priority-based task scheduler with essential concurrency
 //! primitives, enabling developers to build robust firmware with idiomatic Rust safety.
 //!
-//! # Key Features
+//! # What can it do?
 //!
 //! * **Preemptive Priority Scheduling:** Deterministic, priority-based multitasking ensuring critical tasks consistently meet their real-time deadlines.
 //! * **ITC Primitives:** Ergonomic, priority-aware synchronization structures, including Mutexes, Semaphores, and Queues.
@@ -39,6 +39,12 @@
 //!     whyos::start(Freq::ONE_KHZ);
 //! }
 //! ```
+//!
+//! # Features
+//!
+//! * `rp235x` - currently the only supported SoC. Enables support for RP235x microcontrollers.
+//! * `task-panic-recovery` - enables implementation of `panic_handler` which attempts to kill a task that panicked.
+//! * `software-watchdog` - enables watchdog related functionality, see `wdt_*` functions for details.
 //!
 #![no_std]
 #![allow(dead_code, unused)] // to make it easier with managing features

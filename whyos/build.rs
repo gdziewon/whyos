@@ -8,10 +8,22 @@ fn main() {
 
     println!("cargo:rustc-link-search={}", out_dir.display());
 
-    let soc = if env::var("CARGO_FEATURE_RP235X").is_ok() {
-        "rp235x"
-    } else {
-        panic!("Unsupported SoC") // we support only rp235x for now
+    let enabled_socs = [("rp235x", env::var_os("CARGO_FEATURE_RP235X").is_some())]
+        .into_iter()
+        .filter_map(|(soc, enabled)| enabled.then_some(soc))
+        .collect::<Vec<_>>();
+
+    let soc = match enabled_socs.as_slice() {
+        [soc] => *soc,
+        [] => panic!(
+            "WhyOS: enable exactly one SoC feature. Currently supported: `rp235x`.\n\
+             Example: `cargo build --features rp235x`"
+        ),
+        _ => panic!(
+            "WhyOS: enable exactly one SoC feature, but multiple were set: {}.\n\
+             Pick one of: `rp235x`",
+            enabled_socs.join(", ")
+        ),
     };
 
     let linker_script_name = match target_arch.as_str() {

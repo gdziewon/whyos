@@ -2,9 +2,15 @@
 name = "whyos"
 version = "0.1.0"
 edition = "2024"
+authors = ["gdziewon"]
+description = "A lightweight, preemptive RTOS"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/gdziewon/whyos"
+keywords = ["rtos", "kernel", "embedded", "no_std", "microcontroller"]
+categories = ["no-std", "embedded", "os"]
 
 [features]
-default = ["rp235x"]
+default = []
 rp235x = []
 task-panic-recovery = []
 software-watchdog = []
