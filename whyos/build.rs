@@ -45,19 +45,7 @@ fn main() {
     println!("cargo:rerun-if-changed={}", memory_x_path.display());
     println!("cargo:rerun-if-changed=build.rs");
 
-    // try to get git describe info for build identification
-    let git_ident = std::process::Command::new("git")
-        .args(["describe", "--tags", "--dirty", "--always"])
-        .output()
-        .ok()
-        .and_then(|out| if out.status.success() {
-            String::from_utf8(out.stdout).ok()
-        } else { None })
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown".into());
-
-
-    println!("cargo:rustc-env=WHYOS_BUILD_IDENT={}-{}-{}-{}", env!("CARGO_PKG_NAME"), soc, target_arch, git_ident);
+    println!("cargo:rustc-env=WHYOS_BUILD_IDENT={}-{}-{}-{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), soc, target_arch);
     // Re-run build.rs when git HEAD changes
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/index");
