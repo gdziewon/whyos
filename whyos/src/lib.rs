@@ -45,7 +45,7 @@
 //! * `rp235x` - currently the only supported SoC. Enables support for RP235x microcontrollers.
 //! * `task-panic-recovery` - enables implementation of `panic_handler` which attempts to kill a task that panicked.
 //! * `software-watchdog` - enables watchdog related functionality, see `wdt_*` functions for details.
-//!
+//! * `defmt` - enables logging using `defmt` crate.
 #![no_std]
 #![allow(dead_code, unused)] // to make it easier with managing features
 

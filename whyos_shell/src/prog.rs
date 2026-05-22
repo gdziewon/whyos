@@ -2,12 +2,19 @@ use whyos::{StackSize, TaskRoutineArg};
 
 use crate::{uprint, uprintln};
 
+/// Describes a runnable program that can be launched from the shell.
 pub struct Program {
+    /// Program name used in shell commands.
     pub name: &'static str,
+    /// Short human-readable description shown by `list`.
     pub desc: &'static str,
+    /// Task entry function invoked when the program is executed.
     pub entry: TaskRoutineArg<usize>,
+    /// Default argument passed when the user omits one.
     pub default_arg: usize,
+    /// Task priority used when spawning the program.
     pub priority: u8,
+    /// Stack size requested for the task.
     pub stack_size: StackSize,
 }
 

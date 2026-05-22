@@ -2,11 +2,12 @@ use whyos::Mutex;
 use core::fmt;
 use embedded_io::{Write, ErrorType};
 
-pub type PrintFn = fn(&[u8]);
+/// Callback invoked by the shell with raw output bytes.
+pub type OutputFn = fn(&[u8]);
 
-static STDOUT: Mutex<Option<PrintFn>> = Mutex::new(None);
+static STDOUT: Mutex<Option<OutputFn>> = Mutex::new(None);
 
-pub(crate) fn set_stdout(printer: PrintFn) {
+pub(crate) fn set_stdout(printer: OutputFn) {
     *STDOUT.lock() = Some(printer);
 }
 
@@ -45,6 +46,7 @@ pub fn _print_args(args: fmt::Arguments) {
     let _ = fmt::Write::write_fmt(&mut writer, args);
 }
 
+/// Writes formatted text to the shell output and appends a newline.
 #[macro_export]
 macro_rules! uprintln {
     ($($arg:tt)*) => {
@@ -55,6 +57,7 @@ macro_rules! uprintln {
     }
 }
 
+/// Writes formatted text to the shell output.
 #[macro_export]
 macro_rules! uprint {
     ($($arg:tt)*) => {
