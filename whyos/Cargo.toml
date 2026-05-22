@@ -9,6 +9,10 @@ repository = "https://github.com/gdziewon/whyos"
 keywords = ["rtos", "kernel", "embedded", "no_std", "microcontroller"]
 categories = ["no-std", "embedded", "os"]
 
+[package.metadata.docs.rs]
+default-target = "thumbv8m.main-none-eabihf"
+features = ["rp235x", "task-panic-recovery", "software-watchdog", "defmt"]
+
 [features]
 default = []
 rp235x = []
