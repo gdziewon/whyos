@@ -1074,6 +1074,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "whyos_bench"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-semihosting",
+ "defmt 1.0.1",
+ "defmt-rtt",
+ "rp235x-hal",
+ "whyos",
+ "whyos_demo",
+]
+
+[[package]]
 name = "whyos_demo"
 version = "0.1.0"
 dependencies = [

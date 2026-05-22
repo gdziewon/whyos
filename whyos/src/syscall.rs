@@ -14,6 +14,7 @@ pub struct Freq(u32); // Hz
 impl Freq {
     /// A convenience constant representing 1 kilohertz (1000 Hz).
     pub const ONE_KHZ: Self = Self(1000);
+    pub const ONE_HZ: Self = Self(1);
 
     /// Attempts to create new `Freq` from specified Hertz, returning `None` if `hz` is 0.
     #[inline]
@@ -206,4 +207,9 @@ pub fn reboot() -> ! {
 #[inline]
 pub const fn build_name() -> &'static str {
     env!("WHYOS_BUILD_IDENT")
+}
+
+#[inline(always)]
+pub fn cycle_count() -> u32 {
+    arch::cycle_count()
 }

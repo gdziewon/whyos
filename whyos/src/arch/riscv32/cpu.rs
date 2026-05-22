@@ -18,3 +18,9 @@ pub fn reset() -> ! {
 // on interrupt, riscv sets MIE to 0, so if mie=1 then we're in task
 #[inline(always)]
 pub fn is_in_task() -> bool {mstatus::read().mie() }
+
+
+#[inline(always)]
+pub fn cycle_count() -> u32 {
+    riscv::register::mcycle::read() as u32
+}

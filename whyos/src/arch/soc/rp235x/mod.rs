@@ -11,9 +11,15 @@ impl KernelArch for SocArch {
     const HEAP_KB: usize = 256;
 
     unsafe fn init(tick_hz: u32) {
+
+
         log::trace!("Arch initializing SysTick with {} Hz", tick_hz);
         use cortex_m::peripheral::syst::SystClkSource;
         let mut core = unsafe { cortex_m::Peripherals::steal() };
+
+        #[cfg(feature = "profiler")]
+        crate::arch::init_cycle_counter(&mut core);
+
         let syst = &mut core.SYST;
         let interval_us = 1_000_000 / tick_hz; // watchdog tick = 1 MHz
         syst.set_clock_source(SystClkSource::External);

@@ -82,12 +82,12 @@ impl TaskRegistry {
 
 
     // hot path for kernel
-    #[inline]
+    #[inline(always)]
     pub fn get_task_unchecked(&self, tid: TaskId) -> &Tcb {
         &self.tasks[tid]
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_task_mut_unchecked(&mut self, tid: TaskId) -> &mut Tcb {
         &mut self.tasks[tid]
     }

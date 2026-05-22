@@ -2,7 +2,8 @@
 members = [
     "whyos",
     "whyos_demo",
-    "whyos_shell"
+    "whyos_shell",
+    "whyos_bench",
 ]
 resolver = "2"
 

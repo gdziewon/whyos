@@ -18,6 +18,7 @@ default = []
 rp235x = []
 task-panic-recovery = []
 software-watchdog = []
+profiler = []
 
 [dependencies]
 critical-section = "1.2"
