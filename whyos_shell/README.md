@@ -2,6 +2,8 @@
 
 A small user-space shell for interacting with WhyOS — commands, programs and basic I/O.
 
+Documentation can be found on [crates.io](https://crates.io/crates/whyos_shell).
+
 ## License
 
 Licensed under either of

@@ -4,6 +4,8 @@ A minimal, preemptive real-time operating system written in Rust for small embed
 systems. Provides a priority-based scheduler, basic inter-task communication primitives,
 and support for multiple SoCs via feature flags.
 
+Documentation can be found on [crates.io](https://crates.io/crates/whyos).
+
 ## License
 
 Licensed under either of

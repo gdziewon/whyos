@@ -2,8 +2,8 @@
 
 
 This repository holds crates:
- - `whyos` - minimal Real-time Operating System written in Rust.
- - `whyos_shell` - or **Y-Oh!** is a user space shell for interacting with WhyOS.
+ - `whyos` - minimal Real-time Operating System written in Rust ([crates.io](https://crates.io/crates/whyos)).
+ - `whyos_shell` - or **Y-Oh!** is a user space shell for interacting with WhyOS ([crates.io](https://crates.io/crates/whyos_shell)).
  - `whyos_demo` - represents example usage as well as holds functional tests for WhyOS.
 
 ## License
