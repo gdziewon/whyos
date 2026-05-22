@@ -1,6 +1,6 @@
 [package]
 name = "whyos_shell"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["gdziewon"]
 description = "A diagnostic shell for the WhyOS RTOS"
@@ -14,3 +14,10 @@ whyos = { path = "../whyos", version = "0.1.0" }
 
 embedded-io = "0.7.1"
 heapless = "0.9.2" # for String
+
+[features]
+docsrs = ["whyos/rp235x"] # workaround to trick docs.rs
+
+[package.metadata.docs.rs]
+default-target = "thumbv8m.main-none-eabihf"
+features = ["docsrs"]
