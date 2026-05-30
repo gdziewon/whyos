@@ -1,0 +1,14 @@
+[toolchain]
+channel = "1.96.0"
+
+targets = [
+    "thumbv8m.main-none-eabihf",
+    "riscv32imac-unknown-none-elf"
+]
+
+components = [
+    "rust-src",
+    "llvm-tools-preview",
+    "rustfmt",
+    "clippy"
+]
