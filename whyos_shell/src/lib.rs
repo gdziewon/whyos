@@ -64,8 +64,10 @@ pub const BUFFER_SIZE: usize = 64;
 
 const WELCOME_MSG: &str = "WhyOS Shell";
 const PROMPT: &str = "Y-Oh!> ";
-const BACKSPACE_SEQ: &str = "\x08 \x08"; // destructive backspace
+const BACKSPACE_SEQ: &str = "\x08 \x08"; // backspace space backspace
 const CTRL_C: u8 = 0x03;
+const BACKSPACE: u8 = 0x08;
+const DELETE: u8 = 0x7F;
 const SHOW_CURSOR: &str = "\x1b[?25h";
 
 /// Interactive WhyOS shell loop.
@@ -138,8 +140,7 @@ impl<'a> Shell<'a> { // todo: validate no duplicate names on user_progs
                     self.buffer.clear();
                     uprint!("{}", PROMPT);
                 }
-                // BACKSPACE
-                b'\x08' | 0x7F => {
+                BACKSPACE | DELETE => {
                     if !self.buffer.is_empty() { // so user can't backspace the prompt
                         self.buffer.pop();
                         uprint!("{}", BACKSPACE_SEQ);

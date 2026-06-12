@@ -1,7 +1,7 @@
 use crate::hal::{
     self as hal, Clock as _, fugit::RateExtU32 as _,
     gpio::{
-        bank0::{Gpio0, Gpio1, Gpio22},
+        bank0::{Gpio0, Gpio1, Gpio16},
         FunctionUart, FunctionSioOutput, Pin, PullDown
     },
     pac::{UART0, RESETS},
@@ -12,7 +12,7 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
 pub type UartRx = Reader<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
 pub type UartTx = Writer<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
-pub type LedPin = Pin<Gpio22, FunctionSioOutput, PullDown>;
+pub type LedPin = Pin<Gpio16, FunctionSioOutput, PullDown>;
 
 pub struct Board {
     pub sys_freq: u32,
@@ -58,7 +58,7 @@ impl Board {
             pins.gpio1.into_function::<FunctionUart>(),
         );
 
-        let led = pins.gpio22.into_push_pull_output();
+        let led = pins.gpio16.into_push_pull_output();
 
         let mut uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
             .enable(
