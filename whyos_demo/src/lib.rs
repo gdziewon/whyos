@@ -51,12 +51,11 @@ macro_rules! harness {
             let test_fn: fn() -> $crate::TestResult = unsafe { core::mem::transmute(fn_addr) };
 
             {
-                let mut status = TEST_STATUS.lock();
                 match test_fn() {
                     Ok(_) => defmt::info!("OK"),
                     Err(msg) => {
                         defmt::error!("FAILED: {}", msg);
-                        *status = false;
+                        *TEST_STATUS.lock() = false;
                     }
                 }
             }

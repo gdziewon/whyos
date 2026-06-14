@@ -1,7 +1,9 @@
+use embedded_hal::digital::OutputPin;
+
 use crate::hal::{
     self as hal, Clock as _, fugit::RateExtU32 as _,
     gpio::{
-        bank0::{Gpio0, Gpio1, Gpio16},
+        bank0::*,
         FunctionUart, FunctionSioOutput, Pin, PullDown
     },
     pac::{UART0, RESETS},
@@ -13,12 +15,14 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 pub type UartRx = Reader<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
 pub type UartTx = Writer<UART0, (Pin<Gpio0, FunctionUart, PullDown>, Pin<Gpio1, FunctionUart, PullDown>)>;
 pub type LedPin = Pin<Gpio16, FunctionSioOutput, PullDown>;
+pub type TestPin = Pin<Gpio15, FunctionSioOutput, PullDown>;
 
 pub struct Board {
     pub sys_freq: u32,
     pub resets: RESETS,
     pub uart: Uart,
-    pub led: LedPin, // just a LED I hooked up on GPIO22
+    pub led: LedPin, // just a LED I hooked up on GPIO16
+    pub test_pin: TestPin,
 }
 
 pub struct Uart {
@@ -71,11 +75,15 @@ impl Board {
 
         let (rx, tx) = uart.split();
 
+        let mut test_pin = pins.gpio15.into_push_pull_output();
+        let _ = test_pin.set_low();
+
         Self {
             sys_freq,
             resets: pac.RESETS,
             uart: Uart { rx, tx },
             led,
+            test_pin
         }
     }
 }
